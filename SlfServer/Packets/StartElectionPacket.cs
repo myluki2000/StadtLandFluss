@@ -8,7 +8,7 @@ namespace SlfServer.Packets
 {
     internal class StartElectionPacket : SlfPacketBase
     {
-        public static byte PacketTypeId => 100;
+        public const byte PacketTypeId = 100;
 
         public StartElectionPacket(Guid senderId) : base(senderId)
         {

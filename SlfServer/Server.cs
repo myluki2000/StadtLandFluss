@@ -22,8 +22,13 @@ namespace SlfServer
         public Server(UdpClient udpClient)
         {
             this.udpClient = udpClient;
+        }
 
+        public async Task Start()
+        {
             udpClient.BeginReceive(OnUdpClientReceive, null);
+
+            await DiscoverOtherServers();
         }
 
         public async Task DiscoverOtherServers()

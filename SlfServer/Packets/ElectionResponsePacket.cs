@@ -8,7 +8,7 @@ namespace SlfServer.Packets
 {
     internal class ElectionResponsePacket : SlfPacketBase
     {
-        public static byte PacketTypeId => 102;
+        public const byte PacketTypeId = 102;
 
         public ElectionResponsePacket(Guid senderId) : base(senderId)
         {

@@ -8,7 +8,7 @@ namespace SlfServer.Packets
 {
     internal class LeaderAnnouncementPacket : SlfPacketBase
     {
-        public static byte PacketTypeId => 101;
+        public const byte PacketTypeId = 101;
 
         public LeaderAnnouncementPacket(Guid senderId) : base(senderId)
         {

@@ -8,7 +8,7 @@ namespace SlfServer.Packets
 {
     internal class GreetingResponsePacket : SlfPacketBase
     {
-        public static byte PacketTypeId => 51;
+        public const byte PacketTypeId = 51;
 
         public GreetingResponsePacket(Guid senderId) : base(senderId)
         {
