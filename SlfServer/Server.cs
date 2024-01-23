@@ -5,7 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using SlfServer.Packets;
+using SlfServer.Networking.Packets;
 
 namespace SlfServer
 {
@@ -18,6 +18,11 @@ namespace SlfServer
         private ServerState State = ServerState.STARTING;
 
         private readonly List<(IPEndPoint ip, Guid id)> otherServers = new();
+
+        /// <summary>
+        /// Guid of the leader server or null if leader not determined or unknown
+        /// </summary>
+        private Guid? leaderServer = null;
 
         public Server(UdpClient udpClient)
         {
@@ -45,13 +50,31 @@ namespace SlfServer
 
             State = ServerState.ELECTION_STARTED;
 
-            foreach ((IPEndPoint ip, Guid id) server in otherServers)
+            List<(IPEndPoint ip, Guid id)> serversWithHigherIds = otherServers.Where(x => x.id > ServerId).ToList();
+
+            // if we don't know of any servers with an id higher than us, we can annouce ourselves as a leader immediately
+            if (serversWithHigherIds.Count == 0)
             {
-                if (server.id > ServerId)
-                {
-                    await udpClient.SendAsync(startElectionPacket.ToBytes(), server.ip);
-                }
+                await AnnounceMyselfAsLeader();
+                return;
             }
+
+            // otherwise send start election packets to the servers with higher ids and wait for a response
+            foreach ((IPEndPoint ip, Guid id) server in serversWithHigherIds)
+            {
+                await udpClient.SendAsync(startElectionPacket.ToBytes(), server.ip);
+            }
+
+            // TODO: Wait for responses
+        }
+
+        private async Task AnnounceMyselfAsLeader()
+        {
+            leaderServer = ServerId;
+
+            LeaderAnnouncementPacket leaderAnnouncementPacket = new(ServerId);
+
+            await udpClient.SendAsync(leaderAnnouncementPacket.ToBytes());
         }
 
         private void OnUdpClientReceive(IAsyncResult res)

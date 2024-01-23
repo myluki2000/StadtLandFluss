@@ -11,9 +11,6 @@ namespace SlfServer
         {
             udpClient = new UdpClient(1337);
 
-            // may need explicit network adapter to work
-            udpClient.JoinMulticastGroup(IPAddress.Parse("224.0.0.137"));
-
             // TODO: make packets reliable
 
 

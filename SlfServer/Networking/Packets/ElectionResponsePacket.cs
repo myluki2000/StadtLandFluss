@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SlfServer.Packets
+namespace SlfServer.Networking.Packets
 {
     internal class ElectionResponsePacket : SlfPacketBase
     {

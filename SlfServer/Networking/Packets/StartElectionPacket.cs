@@ -4,19 +4,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SlfServer.Packets
+namespace SlfServer.Networking.Packets
 {
-    internal class LeaderAnnouncementPacket : SlfPacketBase
+    internal class StartElectionPacket : SlfPacketBase
     {
-        public const byte PacketTypeId = 101;
+        public const byte PacketTypeId = 100;
 
-        public LeaderAnnouncementPacket(Guid senderId) : base(senderId)
+        public StartElectionPacket(Guid senderId) : base(senderId)
         {
         }
 
         public static SlfPacketBase FromBytesInternal(IEnumerator<byte> e)
         {
-            return new LeaderAnnouncementPacket(e.TakeGuid());
+            return new StartElectionPacket(e.TakeGuid());
         }
 
         public override byte GetPacketTypeId()

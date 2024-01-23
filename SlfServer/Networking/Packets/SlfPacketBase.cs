@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SlfServer.Packets
+namespace SlfServer.Networking.Packets
 {
     internal abstract class SlfPacketBase
     {
@@ -43,7 +43,7 @@ namespace SlfServer.Packets
             data.AddRange(SenderId.ToByteArray(true));
 
             // use reflection to iterate over fields of types inheriting from SlfPacketBase, and serialize the fields to the byte array
-            foreach (FieldInfo field in this.GetType().GetFields())
+            foreach (FieldInfo field in GetType().GetFields())
             {
                 object? value = field.GetValue(this);
 
@@ -81,13 +81,13 @@ namespace SlfServer.Packets
                 }
                 else if (field.FieldType == typeof(int))
                 {
-                    
-                        byte[] bytes = BitConverter.GetBytes((int)value);
 
-                        if (BitConverter.IsLittleEndian)
-                            Array.Reverse(bytes);
+                    byte[] bytes = BitConverter.GetBytes((int)value);
 
-                        data.AddRange(bytes);
+                    if (BitConverter.IsLittleEndian)
+                        Array.Reverse(bytes);
+
+                    data.AddRange(bytes);
                 }
                 else if (field.FieldType == typeof(long))
                 {
@@ -105,7 +105,7 @@ namespace SlfServer.Packets
                 else if (field.FieldType == typeof(double))
                 {
                     byte[] bytes = BitConverter.GetBytes((double)value);
-                    if(BitConverter.IsLittleEndian)
+                    if (BitConverter.IsLittleEndian)
                         Array.Reverse(bytes);
                     data.AddRange(bytes);
                 }
