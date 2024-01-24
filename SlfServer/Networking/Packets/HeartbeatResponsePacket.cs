@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 
 namespace SlfServer.Networking.Packets
 {
-    internal class StartElectionPacket : SlfPacketBase
+    public class HeartbeatResponsePacket : SlfPacketBase
     {
-        public const byte PacketTypeId = 100;
+        public const byte PacketTypeId = 251;
 
-        public StartElectionPacket(Guid senderId) : base(senderId)
+        public bool HasGameRunning;
+
+        public HeartbeatResponsePacket(Guid senderId) : base(senderId)
         {
         }
 

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace SlfServer.Networking.Packets
 {
-    internal abstract class SlfPacketBase
+    public abstract class SlfPacketBase
     {
         public Guid SenderId;
 
@@ -29,7 +29,65 @@ namespace SlfServer.Networking.Packets
             SlfPacketBase packetPrototype = packetTypes.Select(x => (SlfPacketBase)Activator.CreateInstance(x)!)
                 .First(x => x.GetPacketTypeId() == packetId);
 
-            return (SlfPacketBase)packetPrototype.GetType().GetMethod("FromBytesInternal").Invoke(null, new[] { bytes });
+            foreach (FieldInfo field in packetPrototype.GetType().GetFields())
+            {
+                if (field.FieldType == typeof(bool))
+                {
+                    bool value = bytes.TakeBool();
+                    field.SetValue(packetPrototype, value);
+                } 
+                else if (field.FieldType == typeof(sbyte))
+                {
+                    sbyte value = bytes.TakeSByte();
+                    field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(byte))
+                {
+                    byte value = bytes.TakeByte();
+                    field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(short))
+                {
+                    short value = bytes.TakeShort();
+                    field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(ushort))
+                {
+                    ushort value = bytes.TakeUShort();
+                    field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(int))
+                {
+                    int value = bytes.TakeInt();
+                    field.SetValue(packetPrototype, value);
+                } 
+                else if (field.FieldType == typeof(long))
+                {
+                    long value = bytes.TakeLong();
+                    field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(string))
+                {
+                    string value = bytes.TakeString();
+                    field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(double))
+                {
+                    double value = bytes.TakeDouble();
+                    field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(float))
+                {
+                    float value = bytes.TakeSingle();
+                    field.SetValue(packetPrototype, value);
+                }
+                else
+                {
+                    throw new Exception("Encountered field with unsupported type " + field.FieldType.Name);
+                }
+            }
+
+            return packetPrototype;
         }
 
         public byte[] ToBytes()
@@ -38,9 +96,6 @@ namespace SlfServer.Networking.Packets
 
             // add datagram type id
             data.Add(GetPacketTypeId());
-
-            // add datagram sender id
-            data.AddRange(SenderId.ToByteArray(true));
 
             // use reflection to iterate over fields of types inheriting from SlfPacketBase, and serialize the fields to the byte array
             foreach (FieldInfo field in GetType().GetFields())

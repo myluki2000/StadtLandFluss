@@ -14,11 +14,6 @@ namespace SlfServer.Networking.Packets
         {
         }
 
-        public static SlfPacketBase FromBytesInternal(IEnumerator<byte> bytes)
-        {
-            return new ElectionResponsePacket(bytes.TakeGuid());
-        }
-
         public override byte GetPacketTypeId()
         {
             return PacketTypeId;

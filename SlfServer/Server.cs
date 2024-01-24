@@ -5,7 +5,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Serialization;
 using SlfServer.Networking.Packets;
+using Timer = System.Timers.Timer;
 
 namespace SlfServer
 {
@@ -17,12 +19,13 @@ namespace SlfServer
 
         private ServerState State = ServerState.STARTING;
 
-        private readonly List<(IPEndPoint ip, Guid id)> otherServers = new();
+        private (Guid guid, IPAddress ip)? leader = null;
 
         /// <summary>
-        /// Guid of the leader server or null if leader not determined or unknown
+        /// For the leader, this timer regularly sends out the heartbeat.
+        /// For a non-leader, this timer is used to check if the heartbeat of the leader is received regularly.
         /// </summary>
-        private Guid? leaderServer = null;
+        private Timer? heartbeatTimer = null;
 
         public Server(UdpClient udpClient)
         {
@@ -33,15 +36,6 @@ namespace SlfServer
         {
             udpClient.BeginReceive(OnUdpClientReceive, null);
 
-            await DiscoverOtherServers();
-        }
-
-        public async Task DiscoverOtherServers()
-        {
-            GreetingPacket greetingPacket = new(ServerId);
-
-            State = ServerState.SERVER_DISCOVERY;
-            await udpClient.SendAsync(greetingPacket.ToBytes());
         }
 
         public async Task StartElection()
@@ -50,31 +44,40 @@ namespace SlfServer
 
             State = ServerState.ELECTION_STARTED;
 
-            List<(IPEndPoint ip, Guid id)> serversWithHigherIds = otherServers.Where(x => x.id > ServerId).ToList();
+            // multicast send start election packets to other servers and wait for a response
+            await udpClient.SendAsync(startElectionPacket.ToBytes());
 
-            // if we don't know of any servers with an id higher than us, we can annouce ourselves as a leader immediately
-            if (serversWithHigherIds.Count == 0)
+            await Task.Delay(1000);
+
+            if (leader == null)
             {
-                await AnnounceMyselfAsLeader();
-                return;
+                await MakeMyselfLeader();
             }
-
-            // otherwise send start election packets to the servers with higher ids and wait for a response
-            foreach ((IPEndPoint ip, Guid id) server in serversWithHigherIds)
-            {
-                await udpClient.SendAsync(startElectionPacket.ToBytes(), server.ip);
-            }
-
-            // TODO: Wait for responses
         }
 
-        private async Task AnnounceMyselfAsLeader()
+        private async Task MakeMyselfLeader()
         {
-            leaderServer = ServerId;
+            leader = (ServerId, IPAddress.Parse("127.0.0.1"));
 
             LeaderAnnouncementPacket leaderAnnouncementPacket = new(ServerId);
 
             await udpClient.SendAsync(leaderAnnouncementPacket.ToBytes());
+
+            State = ServerState.RUNNING;
+
+            // start heartbeat
+            heartbeatTimer?.Dispose();
+            heartbeatTimer = new Timer(2000)
+            {
+                AutoReset = true
+            };
+
+            heartbeatTimer.Elapsed += async (sender, args) =>
+            {
+                await udpClient.SendAsync(new HeartbeatPacket(ServerId).ToBytes());
+            };
+
+            heartbeatTimer.Start();
         }
 
         private void OnUdpClientReceive(IAsyncResult res)
@@ -84,28 +87,67 @@ namespace SlfServer
             udpClient.BeginReceive(OnUdpClientReceive, null);
 
             SlfPacketBase receivedPacket = SlfPacketBase.FromBytes(receivedBytes.Cast<byte>().GetEnumerator());
+           
+            if (receivedPacket.GetPacketTypeId() == StartElectionPacket.PacketTypeId)
+            {
+                // ignore election packets when we have a lower id than the sender
+                if (ServerId < receivedPacket.SenderId)
+                    return;
 
-            if (receivedPacket.GetPacketTypeId() == GreetingPacket.PacketTypeId)
-            {
-                if(otherServers.All(x => x.id != receivedPacket.SenderId))
-                    otherServers.Add((remoteIpEndPoint, receivedPacket.SenderId));
-
-                // multicast a greeting response; this means that other servers can also discover us if for some reason they haven't yet
-                udpClient.Send(new GreetingResponsePacket(ServerId).ToBytes());
-            } 
-            else if (receivedPacket.GetPacketTypeId() == GreetingResponsePacket.PacketTypeId)
-            {
-                if (otherServers.All(x => x.id != receivedPacket.SenderId))
-                    otherServers.Add((remoteIpEndPoint, receivedPacket.SenderId));
-            }
-            else if (receivedPacket.GetPacketTypeId() == StartElectionPacket.PacketTypeId)
-            {
                 ElectionResponsePacket electionResponsePacket = new(ServerId);
                 // send a response to the server the start election packet came from
                 udpClient.Send(electionResponsePacket.ToBytes(), remoteIpEndPoint);
 
                 StartElection().RunSynchronously();
                 State = ServerState.ELECTION_STARTED;
+            }
+            else if (receivedPacket.GetPacketTypeId() == ElectionResponsePacket.PacketTypeId)
+            {
+                // set leader value (this isn't the final leader, but we are done here and have found a server with a higher id than us)
+                leader = (receivedPacket.SenderId, remoteIpEndPoint.Address);
+            }
+            else if (receivedPacket.GetPacketTypeId() == LeaderAnnouncementPacket.PacketTypeId)
+            {
+                // start a new election if we have a higher id than the announced leader (something has gone wrong!)
+                if (receivedPacket.SenderId < ServerId)
+                {
+                    StartElection().Start();
+                    return;
+                }
+
+                leader = (receivedPacket.SenderId, remoteIpEndPoint.Address);
+
+                heartbeatTimer?.Dispose();
+                // start the timer which checks for regular heartbeats of the leader
+                heartbeatTimer = new Timer(5000)
+                {
+                    AutoReset = true
+                };
+                
+                heartbeatTimer.Elapsed += async (sender, args) => await StartElection();
+
+                heartbeatTimer.Start();
+
+            }
+            else if (receivedPacket.GetPacketTypeId() == HeartbeatPacket.PacketTypeId)
+            {
+                if (!leader.HasValue || receivedPacket.SenderId != leader.Value.guid || heartbeatTimer == null)
+                {
+                    StartElection().Start();
+                    return;
+                }
+
+                // received a heartbeat from the leader, so reset the timer
+                heartbeatTimer.Stop();
+                heartbeatTimer.Start();
+
+                HeartbeatResponsePacket heartbeatResponse = new(ServerId)
+                {
+                    HasGameRunning = false, // TODO: actual game data needed here
+                };
+
+                // TODO: Change this to a singlecast
+                udpClient.Send(heartbeatResponse.ToBytes());
             }
         }
 
@@ -115,8 +157,8 @@ namespace SlfServer
         private enum ServerState
         {
             STARTING,
-            SERVER_DISCOVERY,
             ELECTION_STARTED,
+            RUNNING
         }
     }
 }
