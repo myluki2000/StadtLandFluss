@@ -19,8 +19,11 @@ namespace SlfServer.Networking
 
         private readonly Dictionary<Guid, int> remoteSequenceNumbers = new();
 
-        public NetworkingClient()
+        private readonly Guid identity;
+
+        public NetworkingClient(Guid identity)
         {
+            this.identity = identity;
             udpClient = new UdpClient(1337);
             
             // may need explicit network adapter to work
@@ -31,16 +34,23 @@ namespace SlfServer.Networking
         {
             sequenceNumber++;
 
-            byte[] bytes = ;
+            PacketFrame frame = new(
+                identity,
+                sequenceNumber,
+                packet
+            );
 
-            packet.ToBytes()
-
-            udpClient.Send(bytes);
+            udpClient.Send(frame.ToBytes());
         }
 
         public void Dispose()
         {
             udpClient.Dispose();
+        }
+
+        ~NetworkingClient()
+        {
+            Dispose();
         }
     }
 }
