@@ -10,9 +10,19 @@ namespace SlfServer
     {
         public static byte[] ToBytes(this long value)
         {
-            byte[] bytes = BitConverter.GetBytes((long)value);
+            byte[] bytes = BitConverter.GetBytes(value);
 
             if (BitConverter.IsLittleEndian)
+                Array.Reverse(bytes);
+
+            return bytes;
+        }
+
+        public static byte[] ToBytes(this int value)
+        {
+            byte[] bytes = BitConverter.GetBytes(value);
+
+            if(BitConverter.IsLittleEndian)
                 Array.Reverse(bytes);
 
             return bytes;

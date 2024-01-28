@@ -136,13 +136,7 @@ namespace SlfServer.Networking.Packets
                 }
                 else if (field.FieldType == typeof(int))
                 {
-
-                    byte[] bytes = BitConverter.GetBytes((int)value);
-
-                    if (BitConverter.IsLittleEndian)
-                        Array.Reverse(bytes);
-
-                    data.AddRange(bytes);
+                    data.AddRange(((int)value).ToBytes());
                 }
                 else if (field.FieldType == typeof(long))
                 {
