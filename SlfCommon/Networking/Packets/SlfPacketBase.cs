@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SlfServer.Networking.Packets
+namespace SlfCommon.Networking.Packets
 {
     public abstract class SlfPacketBase
     {
@@ -35,7 +35,7 @@ namespace SlfServer.Networking.Packets
                 {
                     bool value = bytes.TakeBool();
                     field.SetValue(packetPrototype, value);
-                } 
+                }
                 else if (field.FieldType == typeof(sbyte))
                 {
                     sbyte value = bytes.TakeSByte();
@@ -60,7 +60,7 @@ namespace SlfServer.Networking.Packets
                 {
                     int value = bytes.TakeInt();
                     field.SetValue(packetPrototype, value);
-                } 
+                }
                 else if (field.FieldType == typeof(long))
                 {
                     long value = bytes.TakeLong();
@@ -80,6 +80,28 @@ namespace SlfServer.Networking.Packets
                 {
                     float value = bytes.TakeSingle();
                     field.SetValue(packetPrototype, value);
+                }
+                else if (field.FieldType == typeof(int[]))
+                {
+                    int count = bytes.TakeInt();
+
+                    int[] arr = new int[count];
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        arr[i] = bytes.TakeInt();
+                    }
+                }
+                else if (field.FieldType == typeof(string[]))
+                {
+                    int count = bytes.TakeInt();
+
+                    string[] arr = new string[count];
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        arr[i] = bytes.TakeString();
+                    }
                 }
                 else
                 {
@@ -159,6 +181,26 @@ namespace SlfServer.Networking.Packets
                     if (BitConverter.IsLittleEndian)
                         Array.Reverse(bytes);
                     data.AddRange(bytes);
+                }
+                else if (field.FieldType == typeof(int[]))
+                {
+                    int[] arr = (int[])value;
+                    data.AddRange(arr.Length.ToBytes());
+
+                    foreach (int i in arr)
+                    {
+                        data.AddRange(i.ToBytes());
+                    }
+                }
+                else if (field.FieldType == typeof(string[]))
+                {
+                    string[] arr = (string[])value;
+                    data.AddRange(arr.Length.ToBytes());
+
+                    foreach (string s in arr)
+                    {
+                        data.AddRange(Utility.WriteString(s));
+                    }
                 }
                 else
                 {

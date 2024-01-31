@@ -5,17 +5,17 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SlfServer.Networking.Packets
+namespace SlfCommon.Networking.Packets
 {
     public class PacketFrame
     {
-        public readonly long SequenceNumber;
+        public readonly int SequenceNumber;
 
         public readonly Acknowledgement[] PiggybackAcknowledgements;
 
         public readonly SlfPacketBase Payload;
 
-        public PacketFrame(long sequenceNumber, Acknowledgement[] piggybackAcknowledgements, SlfPacketBase payload)
+        public PacketFrame(int sequenceNumber, Acknowledgement[] piggybackAcknowledgements, SlfPacketBase payload)
         {
             SequenceNumber = sequenceNumber;
             PiggybackAcknowledgements = piggybackAcknowledgements;

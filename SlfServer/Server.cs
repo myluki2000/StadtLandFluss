@@ -6,6 +6,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
+using SlfCommon.Networking;
+using SlfCommon.Networking.Packets;
 using SlfServer.Networking.Packets;
 using Timer = System.Timers.Timer;
 
@@ -15,7 +17,7 @@ namespace SlfServer
     {
         public Guid ServerId = Guid.NewGuid();
 
-        private readonly UdpClient udpClient;
+        private readonly NetworkingClient networkingClient;
 
         private ServerState State = ServerState.STARTING;
 
@@ -27,15 +29,12 @@ namespace SlfServer
         /// </summary>
         private Timer? heartbeatTimer = null;
 
-        public Server(UdpClient udpClient)
-        {
-            this.udpClient = udpClient;
-        }
+        public const byte MAX_PLAYER_COUNT = 2;
+        private readonly HashSet<Guid> players = new();
 
-        public async Task Start()
+        public Server()
         {
-            udpClient.BeginReceive(OnUdpClientReceive, null);
-
+            networkingClient = new NetworkingClient(IPAddress.Parse("239.0.0.1"));
         }
 
         public async Task StartElection()
@@ -45,23 +44,23 @@ namespace SlfServer
             State = ServerState.ELECTION_STARTED;
 
             // multicast send start election packets to other servers and wait for a response
-            await udpClient.SendAsync(startElectionPacket.ToBytes());
+            networkingClient.SendToMyGroup(startElectionPacket);
 
             await Task.Delay(1000);
 
             if (leader == null)
             {
-                await MakeMyselfLeader();
+                MakeMyselfLeader();
             }
         }
 
-        private async Task MakeMyselfLeader()
+        private void MakeMyselfLeader()
         {
             leader = (ServerId, IPAddress.Parse("127.0.0.1"));
 
             LeaderAnnouncementPacket leaderAnnouncementPacket = new(ServerId);
 
-            await udpClient.SendAsync(leaderAnnouncementPacket.ToBytes());
+            networkingClient.SendToMyGroup(leaderAnnouncementPacket);
 
             State = ServerState.RUNNING;
 
@@ -72,50 +71,46 @@ namespace SlfServer
                 AutoReset = true
             };
 
-            heartbeatTimer.Elapsed += async (sender, args) =>
+            heartbeatTimer.Elapsed += (sender, args) =>
             {
-                await udpClient.SendAsync(new HeartbeatPacket(ServerId).ToBytes());
+                networkingClient.SendToMyGroup(new HeartbeatPacket(ServerId));
             };
 
             heartbeatTimer.Start();
         }
 
-        private void OnUdpClientReceive(IAsyncResult res)
+        private void ReceiveNetworkingMessages()
         {
-            IPEndPoint? remoteIpEndPoint = new(IPAddress.Any, 0);
-            byte[] receivedBytes = udpClient.EndReceive(res, ref remoteIpEndPoint);
-            udpClient.BeginReceive(OnUdpClientReceive, null);
+            (IPAddress sender, SlfPacketBase packet) = networkingClient.Receive();
 
-            SlfPacketBase receivedPacket = SlfPacketBase.FromBytes(receivedBytes.Cast<byte>().GetEnumerator());
-           
-            if (receivedPacket.GetPacketTypeId() == StartElectionPacket.PacketTypeId)
+            if (packet is StartElectionPacket)
             {
                 // ignore election packets when we have a lower id than the sender
-                if (ServerId < receivedPacket.SenderId)
+                if (ServerId < packet.SenderId)
                     return;
 
                 ElectionResponsePacket electionResponsePacket = new(ServerId);
                 // send a response to the server the start election packet came from
-                udpClient.Send(electionResponsePacket.ToBytes(), remoteIpEndPoint);
+                networkingClient.SendOneOff(electionResponsePacket, sender);
 
                 StartElection().RunSynchronously();
                 State = ServerState.ELECTION_STARTED;
             }
-            else if (receivedPacket.GetPacketTypeId() == ElectionResponsePacket.PacketTypeId)
+            else if (packet is ElectionResponsePacket)
             {
                 // set leader value (this isn't the final leader, but we are done here and have found a server with a higher id than us)
-                leader = (receivedPacket.SenderId, remoteIpEndPoint.Address);
+                leader = (packet.SenderId, sender);
             }
-            else if (receivedPacket.GetPacketTypeId() == LeaderAnnouncementPacket.PacketTypeId)
+            else if (packet is LeaderAnnouncementPacket)
             {
                 // start a new election if we have a higher id than the announced leader (something has gone wrong!)
-                if (receivedPacket.SenderId < ServerId)
+                if (packet.SenderId < ServerId)
                 {
                     StartElection().Start();
                     return;
                 }
 
-                leader = (receivedPacket.SenderId, remoteIpEndPoint.Address);
+                leader = (packet.SenderId, sender);
 
                 heartbeatTimer?.Dispose();
                 // start the timer which checks for regular heartbeats of the leader
@@ -129,9 +124,9 @@ namespace SlfServer
                 heartbeatTimer.Start();
 
             }
-            else if (receivedPacket.GetPacketTypeId() == HeartbeatPacket.PacketTypeId)
+            else if (packet is HeartbeatPacket)
             {
-                if (!leader.HasValue || receivedPacket.SenderId != leader.Value.guid || heartbeatTimer == null)
+                if (!leader.HasValue || packet.SenderId != leader.Value.guid || heartbeatTimer == null)
                 {
                     StartElection().Start();
                     return;
@@ -146,8 +141,11 @@ namespace SlfServer
                     HasGameRunning = false, // TODO: actual game data needed here
                 };
 
-                // TODO: Change this to a singlecast
-                udpClient.Send(heartbeatResponse.ToBytes());
+                networkingClient.SendOneOff(heartbeatResponse, leader.Value.ip);
+            }
+            else if (packet is MatchJoinPacket matchJoinPacket)
+            {
+                MatchJoinResponsePacket response = new(ServerId);
             }
         }
 

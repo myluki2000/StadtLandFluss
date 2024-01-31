@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SlfServer
+namespace SlfCommon
 {
     public static class ToByteExtensionMethods
     {
