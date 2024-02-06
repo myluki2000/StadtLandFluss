@@ -145,11 +145,7 @@ namespace SlfServer
             }
             else if (packet is MatchJoinPacket matchJoinPacket)
             {
-                bool accept = players.Count < MAX_PLAYER_COUNT;
-
-                MatchJoinResponsePacket response = new(ServerId, accept,);
-
-                // TODO: Complete this response
+                MatchJoinResponsePacket response = new(ServerId);
             }
         }
 

@@ -10,10 +10,10 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 5;
 
-        public readonly bool Accepted;
+        public required bool Accepted;
 
-        public readonly string MatchMulticastIp;
-        public readonly Guid MatchId;
+        public required string MatchMulticastIp;
+        public required Guid MatchId;
 
         public MatchJoinResponsePacket(Guid senderId, bool accepted, string? matchMulticastIp = null, Guid? matchId = null) : base(senderId)
         {

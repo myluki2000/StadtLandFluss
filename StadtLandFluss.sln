@@ -7,9 +7,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlfServer", "SlfServer\SlfS
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlfClient", "SlfClient\SlfClient.csproj", "{2265DD98-42B2-4E29-97F4-F98F7EB0BF32}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlfCommon", "SlfCommon\SlfCommon.csproj", "{AC177240-A586-438F-9564-779251179182}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SlfTest", "SlfTest\SlfTest.csproj", "{B53DAAC4-12E7-4C50-9512-C4737806B6EB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SlfCommon", "SlfCommon\SlfCommon.csproj", "{AC177240-A586-438F-9564-779251179182}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,10 +27,6 @@ Global
 		{AC177240-A586-438F-9564-779251179182}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AC177240-A586-438F-9564-779251179182}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AC177240-A586-438F-9564-779251179182}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B53DAAC4-12E7-4C50-9512-C4737806B6EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B53DAAC4-12E7-4C50-9512-C4737806B6EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B53DAAC4-12E7-4C50-9512-C4737806B6EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B53DAAC4-12E7-4C50-9512-C4737806B6EB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
