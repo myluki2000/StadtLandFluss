@@ -10,6 +10,11 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 2;
 
+        /// <summary>
+        /// Empty constructor used by reflection.
+        /// </summary>
+        public MigrateMatchRequestPacket() {}
+
         public MigrateMatchRequestPacket(Guid senderId) : base(senderId)
         {
         }

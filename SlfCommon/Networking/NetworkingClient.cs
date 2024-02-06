@@ -45,21 +45,23 @@ namespace SlfCommon.Networking
         /// </summary>
         private const byte MAGIC_BYTE_NACK = 0xBF;
 
-        private const int PORT = 1337;
+        public int Port { get; }
 
-        private IPAddress? multicastAddress = null;
-        public bool InMulticastGroup => multicastAddress != null;
+        public IPAddress? MulticastAddress { get; private set; } = null;
+        public bool InMulticastGroup => MulticastAddress != null;
 
-        public NetworkingClient(IPAddress? multicastAddress = null)
+        public NetworkingClient(IPAddress? multicastAddress = null, int port = 1337)
         {
-            udpClient = new UdpClient(PORT);
+            Port = port;
+            udpClient = new UdpClient(Port);
+            udpClient.MulticastLoopback = false;
 
             // join multicast group if multicast address specified in constructor
             if (multicastAddress != null)
             {
                 // may need explicit network adapter to work
                 udpClient.JoinMulticastGroup(multicastAddress);
-                this.multicastAddress = multicastAddress;
+                this.MulticastAddress = multicastAddress;
             }
 
             receiveThread = new Thread(ReceiveMessages);
@@ -74,7 +76,7 @@ namespace SlfCommon.Networking
             }
 
             udpClient.JoinMulticastGroup(multicastAddress);
-            this.multicastAddress = multicastAddress;
+            this.MulticastAddress = multicastAddress;
         }
 
         /// <summary>
@@ -84,11 +86,11 @@ namespace SlfCommon.Networking
         /// 
         /// Throws an exception if called when the NetworkingClient isn't in a multicast group.
         /// </summary>
-        public void SendToMyGroup(SlfPacketBase packet)
+        public void SendOrderedReliableToGroup(SlfPacketBase packet, bool drop = false)
         {
             if (!InMulticastGroup)
                 throw new Exception(
-                    "Called SendToMyGroup() even though NetworkingClient isn't in any multicast group.");
+                    "Called SendOrderedReliableToGroup() even though NetworkingClient isn't in any multicast group.");
 
             sequenceNumber++;
 
@@ -107,7 +109,19 @@ namespace SlfCommon.Networking
             bytes.Add(MAGIC_BYTE_PACKET_FRAME);
             bytes.AddRange(frame.ToBytes());
 
-            udpClient.Send(bytes.ToArray(), new IPEndPoint(multicastAddress!, PORT));
+            sentPackets.Add(frame.SequenceNumber, frame.Payload);
+
+            if(!drop)
+                udpClient.Send(bytes.ToArray(), new IPEndPoint(MulticastAddress!, Port));
+        }
+
+        public void SendOneOffToGroup(SlfPacketBase packet)
+        {
+            if (!InMulticastGroup)
+                throw new Exception(
+                    "Called SendOneOffToGroup() even though NetworkingClient isn't in any multicast group.");
+
+            SendOneOff(packet, MulticastAddress!);
         }
 
         /// <summary>
@@ -120,7 +134,7 @@ namespace SlfCommon.Networking
             bytes.Add(MAGIC_BYTE_ONE_OFF_PACKET);
             bytes.AddRange(packet.ToBytes());
 
-            udpClient.Send(bytes.ToArray(), new IPEndPoint(targetAddress, PORT));
+            udpClient.Send(bytes.ToArray(), new IPEndPoint(targetAddress, Port));
         }
 
         private void SendNegativeAck(IPAddress target, int actualSequenceNumber, int expectedSequenceNumber)
@@ -134,7 +148,7 @@ namespace SlfCommon.Networking
             bytes.AddRange(expectedSequenceNumber.ToBytes());
 
             // send NACK to the endpoint of which we are missing messages
-            udpClient.Send(bytes.ToArray(), new IPEndPoint(target, PORT));
+            udpClient.Send(bytes.ToArray(), new IPEndPoint(target, Port));
         }
 
         public (IPAddress sender, SlfPacketBase packet) Receive()
@@ -158,7 +172,10 @@ namespace SlfCommon.Networking
 
                 // 0-length array returned when connection is closed
                 if (data.Length == 0)
+                {
+                    Console.WriteLine("Stopping network receive thread...");
                     return;
+                }
 
                 using IEnumerator<byte> dataEnumerator = data.Cast<byte>().GetEnumerator();
 
@@ -171,6 +188,7 @@ namespace SlfCommon.Networking
                 }
                 else if (magicByte == MAGIC_BYTE_NACK)
                 {
+                    Console.WriteLine("Received data over UDP (NACK).");
                     ReceiveNackFrame(remoteEndpoint, dataEnumerator);
                 } 
                 else if (magicByte == MAGIC_BYTE_ONE_OFF_PACKET)
@@ -185,6 +203,9 @@ namespace SlfCommon.Networking
         {
             SlfPacketBase packet = SlfPacketBase.FromBytes(data);
 
+            Console.WriteLine("Received data over UDP (unreliable one-off, sender=" + packet.SenderId
+                + ", packet type=" + packet.GetType().Name + ").");
+
             // add packet to the delivery queue with a dummy frame
             deliveryQueue.Add((remoteEndpoint.Address, new PacketFrame(-1, Array.Empty<PacketFrame.Acknowledgement>(), packet)));
         }
@@ -193,14 +214,24 @@ namespace SlfCommon.Networking
         {
             PacketFrame frame = PacketFrame.FromBytes(data);
 
-            if (frame.SequenceNumber == remoteSequenceNumbers[remoteEndpoint.Address] + 1)
+            Console.WriteLine("Received data over UDP (ordered reliable frame, sender=" + frame.Payload.SenderId
+                + ", seq no=" + frame.SequenceNumber
+                + ", packet type=" + frame.Payload.GetType().Name + ").");
+
+            if (!remoteSequenceNumbers.TryGetValue(remoteEndpoint.Address, out int storedSequenceNumber))
+            {
+                storedSequenceNumber = 0;
+                remoteSequenceNumbers[remoteEndpoint.Address] = 0;
+            }
+
+            if (frame.SequenceNumber == storedSequenceNumber + 1)
             {
                 // if sequence number is exactly the next number after the packet we have last delivered from this source, we
                 // can deliver this packet too
                 deliveryQueue.Add((remoteEndpoint.Address, frame));
                 remoteSequenceNumbers[remoteEndpoint.Address]++;
             }
-            else if (frame.SequenceNumber > remoteSequenceNumbers[remoteEndpoint.Address] + 1)
+            else if (frame.SequenceNumber > storedSequenceNumber + 1)
             {
                 // if sequence number of this packet is not the next number following after the one we delivered last, we put the
                 // packet in the holdback queue to wait for the rest of the packets to come in
@@ -208,13 +239,18 @@ namespace SlfCommon.Networking
                 if(!holdbackList.Contains((remoteEndpoint.Address, frame)))
                     holdbackList.Add((remoteEndpoint.Address, frame));
 
-                SendNegativeAck(remoteEndpoint.Address, frame.SequenceNumber, remoteSequenceNumbers[remoteEndpoint.Address]);
+                SendNegativeAck(remoteEndpoint.Address, frame.SequenceNumber, storedSequenceNumber);
             }
             // else drop the packet, we already have it
 
             foreach (PacketFrame.Acknowledgement acknowledgement in frame.PiggybackAcknowledgements)
             {
-                if (acknowledgement.SequenceNumber > remoteSequenceNumbers[acknowledgement.RemoteEndpoint])
+                if (!remoteSequenceNumbers.ContainsKey(acknowledgement.RemoteEndpoint))
+                {
+                    // we haven't received any packet from this endpoint yet, so treat it as if it was seq number 0
+                    SendNegativeAck(acknowledgement.RemoteEndpoint, acknowledgement.SequenceNumber, 0);
+                }
+                else if (acknowledgement.SequenceNumber > remoteSequenceNumbers[acknowledgement.RemoteEndpoint])
                 {
                     // we have missed a packet from this endpoint
                     SendNegativeAck(acknowledgement.RemoteEndpoint, acknowledgement.SequenceNumber, remoteSequenceNumbers[acknowledgement.RemoteEndpoint]);
@@ -271,7 +307,7 @@ namespace SlfCommon.Networking
                 bytes.Add(MAGIC_BYTE_PACKET_FRAME);
                 bytes.AddRange(frame.ToBytes());
 
-                udpClient.Send(bytes.ToArray(), new IPEndPoint(remoteEndpoint.Address, PORT));
+                udpClient.Send(bytes.ToArray(), new IPEndPoint(remoteEndpoint.Address, Port));
             }
         }
     }

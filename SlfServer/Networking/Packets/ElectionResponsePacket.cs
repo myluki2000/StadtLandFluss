@@ -11,6 +11,13 @@ namespace SlfServer.Networking.Packets
     {
         public const byte PacketTypeId = 102;
 
+        /// <summary>
+        /// Empty constructor used by reflection.
+        /// </summary>
+        public ElectionResponsePacket()
+        {
+        }
+
         public ElectionResponsePacket(Guid senderId) : base(senderId)
         {
         }

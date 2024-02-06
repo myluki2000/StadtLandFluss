@@ -16,10 +16,16 @@ namespace SlfCommon.Networking.Packets
         /// <summary>
         /// Letter with which the words have to start this round.
         /// </summary>
-        public required string Letter;
+        public readonly string Letter;
 
-        public RoundStartPacket(Guid senderId) : base(senderId)
+        /// <summary>
+        /// Empty constructor used by reflection.
+        /// </summary>
+        public RoundStartPacket() {}
+
+        public RoundStartPacket(Guid senderId, string letter) : base(senderId)
         {
+            Letter = letter;
         }
 
         public override byte GetPacketTypeId()

@@ -14,6 +14,11 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 1;
 
+        /// <summary>
+        /// Empty constructor used by reflection.
+        /// </summary>
+        public RequestMatchAssignmentPacket() {}
+
         public RequestMatchAssignmentPacket(Guid senderId) : base(senderId)
         {
         }

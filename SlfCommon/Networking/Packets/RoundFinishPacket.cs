@@ -6,19 +6,21 @@ using System.Threading.Tasks;
 
 namespace SlfCommon.Networking.Packets
 {
+    /// <summary>
+    /// Sent to the multicast group by the client who finishes first to notify the server and other clients that
+    /// the round has ended.
+    /// </summary>
     public class RoundFinishPacket : SlfPacketBase
     {
         public const byte PacketTypeId = 8;
 
-        public required string[] answersCity;
-        public required string[] answersCountry;
-        public required string[] answersRiver;
+        /// <summary>
+        /// Empty constructor used by reflection.
+        /// </summary>
+        public RoundFinishPacket() {}
 
-        public RoundFinishPacket(Guid senderId, string[] answersCity, string[] answersCountry, string[] answersRiver) : base(senderId)
+        public RoundFinishPacket(Guid senderId) : base(senderId)
         {
-            this.answersCity = answersCity;
-            this.answersCountry = answersCountry;
-            this.answersRiver = answersRiver;
         }
 
         public override byte GetPacketTypeId()

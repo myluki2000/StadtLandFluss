@@ -1,19 +1,29 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
+using SlfCommon.Networking.Packets;
 
 namespace SlfServer
 {
     internal class Program
     {
-        private static UdpClient udpClient;
+        private static Server server;
 
         static async Task Main(string[] args)
         {
-            udpClient = new UdpClient(1337);
+            Type[] packetTypes = Assembly.GetExecutingAssembly().GetTypes()
+                .Where(x => x.BaseType == typeof(SlfPacketBase)
+                            && x is { IsClass: true, IsAbstract: false, Namespace: "SlfServer.Networking.Packets" })
+                .ToArray();
 
-            // TODO: make packets reliable
+            SlfPacketBase.RegisterTypes(packetTypes);
 
+            packetTypes = SlfPacketBase.RegisteredPacketTypes;
 
+            server = new Server();
+            Console.WriteLine("Starting Server... Server ID: " + server.ServerId);
+            Console.WriteLine("Starting leader election because server was just started...");
+            server.StartElection();
         }
     }
 }

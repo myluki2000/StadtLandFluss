@@ -11,6 +11,13 @@ namespace SlfServer.Networking.Packets
     {
         public const byte PacketTypeId = 250;
 
+        /// <summary>
+        /// Empty constructor used by reflection.
+        /// </summary>
+        public HeartbeatPacket()
+        {
+        }
+
         public HeartbeatPacket(Guid senderId) : base(senderId)
         {
         }

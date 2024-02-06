@@ -13,6 +13,11 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 4;
 
+        /// <summary>
+        /// Empty constructor used by reflection.
+        /// </summary>
+        public MatchJoinPacket() {}
+
         public MatchJoinPacket(Guid senderId) : base(senderId)
         {
         }
