@@ -13,8 +13,8 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 3;
 
-        public required Guid MatchServerId;
-        public required string MatchServerIp;
+        public readonly Guid MatchServerId;
+        public readonly string MatchServerIp;
 
         public MatchAssignmentPacket(Guid senderId, Guid matchServerId, string matchServerIp) : base(senderId)
         {

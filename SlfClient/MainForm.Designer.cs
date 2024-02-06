@@ -36,12 +36,13 @@
             tbCountry = new TextBox();
             lblOutput = new Label();
             btnFinish = new Button();
+            lblSelectedLetter = new Label();
             SuspendLayout();
             // 
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(34, 9);
+            label1.Location = new Point(34, 30);
             label1.Name = "label1";
             label1.Size = new Size(31, 15);
             label1.TabIndex = 0;
@@ -49,7 +50,7 @@
             // 
             // tbCity
             // 
-            tbCity.Location = new Point(71, 6);
+            tbCity.Location = new Point(71, 27);
             tbCity.Name = "tbCity";
             tbCity.Size = new Size(204, 23);
             tbCity.TabIndex = 1;
@@ -57,7 +58,7 @@
             // label2
             // 
             label2.AutoSize = true;
-            label2.Location = new Point(12, 38);
+            label2.Location = new Point(12, 59);
             label2.Name = "label2";
             label2.Size = new Size(53, 15);
             label2.TabIndex = 2;
@@ -66,7 +67,7 @@
             // label3
             // 
             label3.AutoSize = true;
-            label3.Location = new Point(29, 67);
+            label3.Location = new Point(29, 88);
             label3.Name = "label3";
             label3.Size = new Size(36, 15);
             label3.TabIndex = 3;
@@ -74,14 +75,14 @@
             // 
             // tbRiver
             // 
-            tbRiver.Location = new Point(71, 64);
+            tbRiver.Location = new Point(71, 85);
             tbRiver.Name = "tbRiver";
             tbRiver.Size = new Size(204, 23);
             tbRiver.TabIndex = 4;
             // 
             // tbCountry
             // 
-            tbCountry.Location = new Point(71, 35);
+            tbCountry.Location = new Point(71, 56);
             tbCountry.Name = "tbCountry";
             tbCountry.Size = new Size(204, 23);
             tbCountry.TabIndex = 5;
@@ -97,18 +98,29 @@
             // 
             // btnFinish
             // 
-            btnFinish.Location = new Point(200, 93);
+            btnFinish.Location = new Point(200, 114);
             btnFinish.Name = "btnFinish";
             btnFinish.Size = new Size(75, 23);
             btnFinish.TabIndex = 7;
             btnFinish.Text = "Finish!";
             btnFinish.UseVisualStyleBackColor = true;
+            btnFinish.Click += btnFinish_Click;
+            // 
+            // lblSelectedLetter
+            // 
+            lblSelectedLetter.AutoSize = true;
+            lblSelectedLetter.Location = new Point(12, 9);
+            lblSelectedLetter.Name = "lblSelectedLetter";
+            lblSelectedLetter.Size = new Size(181, 15);
+            lblSelectedLetter.TabIndex = 8;
+            lblSelectedLetter.Text = "The selected letter this round is: -";
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(639, 450);
+            Controls.Add(lblSelectedLetter);
             Controls.Add(btnFinish);
             Controls.Add(lblOutput);
             Controls.Add(tbCountry);
@@ -133,5 +145,6 @@
         private TextBox tbCountry;
         private Label lblOutput;
         private Button btnFinish;
+        private Label lblSelectedLetter;
     }
 }
