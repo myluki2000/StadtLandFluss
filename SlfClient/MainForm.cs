@@ -7,13 +7,19 @@ namespace SlfClient
     {
         private readonly MatchClient matchClient;
 
-        public MainForm()
+        public MainForm(MatchClient matchClient)
         {
+            this.matchClient = matchClient;
+
+            Console.WriteLine("Opening game window...");
+
             InitializeComponent();
 
             matchClient.OnRoundStarted += MatchClientOnRoundStarted;
             matchClient.OnRoundFinished += MatchClientOnRoundFinished;
             matchClient.OnRoundResults += MatchClientOnRoundResults;
+
+            lblSelectedLetter.Text = "The selected letter this round is: " + matchClient.CurrentLetter ?? "-";
         }
 
         private void MatchClientOnRoundFinished(object? sender, EventArgs e)

@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlfClient", "SlfClient\SlfC
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlfCommon", "SlfCommon\SlfCommon.csproj", "{AC177240-A586-438F-9564-779251179182}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SlfTest", "SlfTest\SlfTest.csproj", "{B53DAAC4-12E7-4C50-9512-C4737806B6EB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlfTest", "SlfTest\SlfTest.csproj", "{B53DAAC4-12E7-4C50-9512-C4737806B6EB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

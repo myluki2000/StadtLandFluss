@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
@@ -54,6 +55,11 @@ namespace SlfServer
         /// </summary>
         private Timer? heartbeatTimer = null;
 
+        /// <summary>
+        /// Sends regular heartbeats to the multicast group of the match.
+        /// </summary>
+        private Timer? matchHeartbeatTimer = null;
+
         public const byte MAX_PLAYER_COUNT = 2;
         private readonly HashSet<Guid> players = new();
 
@@ -78,6 +84,11 @@ namespace SlfServer
         /// </summary>
         private readonly Dictionary<Guid, (IPAddress ipAddress, HeartbeatResponsePacket status)> serverStatuses = new();
 
+        /// <summary>
+        /// Random Number Generator.
+        /// </summary>
+        private Random rand = new();
+
         public Server()
         {
             Console.WriteLine("Starting server...");
@@ -86,7 +97,7 @@ namespace SlfServer
             wordValidator = new();
             Console.WriteLine("Word loading complete.");
 
-            networkingClient = new NetworkingClient(IPAddress.Parse("239.0.0.1"));
+            networkingClient = new NetworkingClient(ServerId, IPAddress.Parse("239.0.0.1"));
 
             receiveThread = new Thread(ReceiveNetworkingMessages);
             receiveThread.Start();
@@ -95,12 +106,10 @@ namespace SlfServer
             matchReceiveThread.Start();
 
             // generate a multicast IP for the match run by this server
-            // initiate random with a seed derived from a GUID. It's a good seed source, trust me!
             IPAddress matchMulticastAddress;
             while (true)
             {
                 // generate a random multicast IP
-                Random rand = new(Guid.NewGuid().GetHashCode());
                 byte secondByte = (byte)(rand.Next(254) + 1);
                 byte thirdByte = (byte)(rand.Next(254) + 1);
                 byte fourthByte = (byte)(rand.Next(254) + 1);
@@ -111,7 +120,21 @@ namespace SlfServer
                     break;
             }
 
-            matchNetworkingClient = new(matchMulticastAddress, 1338);
+            matchNetworkingClient = new(ServerId, matchMulticastAddress, 1338);
+
+            // start match heartbeat timer
+            matchHeartbeatTimer = new Timer(500)
+            {
+                AutoReset = true,
+            };
+            matchHeartbeatTimer.Elapsed += (sender, args) =>
+            {
+                if (matchNetworkingClient.InMulticastGroup)
+                {
+                    matchNetworkingClient.SendHeartbeatToGroup();
+                }
+            };
+            matchHeartbeatTimer.Start();
 
             Console.WriteLine("Server startup complete! Server running!");
         }
@@ -250,29 +273,16 @@ namespace SlfServer
                     // update this server's (the server the heartbeat response came from) status in the serverStatuses dictionary
                     serverStatuses[heartbeatResponsePacket.SenderId] = (sender, heartbeatResponsePacket);
                 }
-                else if (packet is MatchJoinPacket matchJoinPacket)
-                {
-                    bool accept = players.Count < MAX_PLAYER_COUNT;
-
-                    // if the server, for some reason, does not have a match multicast group, then reject the player
-                    if (!matchNetworkingClient.InMulticastGroup)
-                        accept = false;
-
-                    // add player to our players list
-                    players.Add(matchJoinPacket.SenderId);
-
-                    // if there are at least 2 players waiting for a match, we can start a match
-                    if(players.Count > 2)
-                        StartMatch();
-
-                    MatchJoinResponsePacket response = new(ServerId, accept, matchNetworkingClient.MulticastAddress?.ToString(), matchId);
-                    networkingClient.SendOneOff(response, sender);
-                }
                 else if (packet is RequestMatchAssignmentPacket requestMatchAssignmentPacket)
                 {
+                    Console.WriteLine("Received a match assignment request.");
+
                     // only the leader should handle this packet, because the leader assigns players to game servers
-                    if(Leader == null || Leader.Value.guid != ServerId)
+                    if (Leader == null || Leader.Value.guid != ServerId)
+                    {
+                        Console.WriteLine("[Match Assignment] I'm not the leader server, so I'm not going to handle it.");
                         continue;
+                    }
 
                     Guid playerId = requestMatchAssignmentPacket.SenderId;
 
@@ -284,23 +294,45 @@ namespace SlfServer
                         .Select(x => (x.Key, x.Value.ipAddress))
                         .FirstOrDefault();
 
+                    // if not, check if player is part of match on THIS server
                     if (matchServer == default((Guid id, IPAddress ip)))
                     {
-                        // if we don't have a server where the player was already part of the match, find a server with a free slot
+                        if (players.Contains(playerId))
+                        {
+                            matchServer = (ServerId, IPAddress.Parse("127.0.0.1"));
+                        }
+                    }
+
+                    // if we don't have a server where the player was already part of the match, find a server with a free slot
+                    if (matchServer == default((Guid id, IPAddress ip)))
+                    {
+                        Console.WriteLine("[Match Assignment] Could not find any matches the player is already part of. Finding a server with free slots...");
                         matchServer = serverStatuses
                             .Where(x => x.Value.status.CurrentPlayers.Length < x.Value.status.MaxPlayerCount)
                             .Select(x => (x.Key, x.Value.ipAddress))
                             .FirstOrDefault();
                     }
 
+                    // if no slot found on other servers, check if a slot is free on the leader server
                     if (matchServer == default((Guid id, IPAddress ip)))
                     {
-                        // TODO: Send a response to the client, denying their match assignment request, instead of just doing nothing
+                        if (players.Count < MAX_PLAYER_COUNT)
+                        {
+                            matchServer = (ServerId, IPAddress.Parse("127.0.0.1"));
+                        }
+                    }
+
+                    // otherwise, deny the match assignment request
+                    if (matchServer == default((Guid id, IPAddress ip)))
+                    {
+                        Console.WriteLine("[Match Assignment] Could not find any servers with free player slots. Denying match assignment request.");
+                        MatchAssignmentPacket errorResponsePacket = new(ServerId, false, "No free player slots found on any server!", Guid.Empty, "");
+                        networkingClient.SendOneOff(errorResponsePacket, sender);
                         continue;
                     }
 
                     // send response to the client requesting a match assignment
-                    MatchAssignmentPacket responsePacket = new(ServerId, matchServer.id, matchServer.ip.ToString());
+                    MatchAssignmentPacket responsePacket = new(ServerId, true, "success", matchServer.id, matchServer.ip.ToString());
                     networkingClient.SendOneOff(responsePacket, sender);
                 }
             }
@@ -314,9 +346,31 @@ namespace SlfServer
         {
             while (true)
             {
-                (IPAddress sender, SlfPacketBase packet) = networkingClient.Receive();
+                (IPAddress sender, SlfPacketBase packet) = matchNetworkingClient.Receive();
 
-                if (packet is RoundFinishPacket roundFinishPacket)
+                if (packet is MatchJoinPacket matchJoinPacket)
+                {
+                    // either a slot has to be free for the player, or they already need to be part of the match
+                    bool accept = players.Count < MAX_PLAYER_COUNT || players.Contains(matchJoinPacket.SenderId);
+
+                    // if the server, for some reason, does not have a match multicast group, then reject the player
+                    if (!matchNetworkingClient.InMulticastGroup)
+                    {
+                        Console.WriteLine("Had to reject a client because we are not in a multicast group! THIS SHOULD NEVER HAPPEN!");
+                        accept = false;
+                    }
+
+                    // add player to our players list
+                    players.Add(matchJoinPacket.SenderId);
+
+                    // if no match is running, start one
+                    if (matchId == null)
+                        StartMatch();
+
+                    MatchJoinResponsePacket response = new(ServerId, accept, matchNetworkingClient.MulticastAddress?.ToString(), matchId);
+                    matchNetworkingClient.SendOneOff(response, sender);
+                }
+                else if (packet is RoundFinishPacket roundFinishPacket)
                 {
                     currentlyWaitingForPlayerAnswers = true;
 
@@ -375,11 +429,19 @@ namespace SlfServer
                 throw new Exception("Tried to start a new match even though a match is already running!");
 
             matchId = Guid.NewGuid();
+
+            StartRound();
         }
 
         private void StartRound()
         {
+            const string allowedLetters = "abcdefghijklmnopqrstuvwxyz";
 
+            currentRound = new MatchRound(allowedLetters[rand.Next(0, allowedLetters.Length)].ToString());
+
+            // send round start packet
+            RoundStartPacket packet = new(ServerId, currentRound.Letter);
+            matchNetworkingClient.SendOrderedReliableToGroup(packet);
         }
 
         /// <summary>

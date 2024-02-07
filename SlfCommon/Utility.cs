@@ -45,52 +45,54 @@ namespace SlfCommon
         /// <exception cref="SerializationException">Thrown when the object has a type which is not supported by the deserializer.</exception>
         public static object PrimitiveFromBytes(Type type, IEnumerator<byte> bytes)
         {
+            object value;
+
             if (type == typeof(bool))
             {
-                bool value = bytes.TakeBool();
+                value = bytes.TakeBool();
             }
             else if (type == typeof(sbyte))
             {
-                sbyte value = bytes.TakeSByte();
+                value = bytes.TakeSByte();
             }
             else if (type == typeof(byte))
             {
-                byte value = bytes.TakeByte();
+                value = bytes.TakeByte();
             }
             else if (type == typeof(short))
             {
-                short value = bytes.TakeShort();
+                value = bytes.TakeShort();
             }
             else if (type == typeof(ushort))
             {
-                ushort value = bytes.TakeUShort();
+                value = bytes.TakeUShort();
             }
             else if (type == typeof(int))
             {
-                int value = bytes.TakeInt();
+                value = bytes.TakeInt();
             }
             else if (type == typeof(long))
             {
-                long value = bytes.TakeLong();
+                value = bytes.TakeLong();
             }
             else if (type == typeof(string))
             {
-                string value = bytes.TakeString();
+                value = bytes.TakeString();
             }
             else if (type == typeof(double))
             {
-                double value = bytes.TakeDouble();
+                value = bytes.TakeDouble();
             }
             else if (type == typeof(float))
             {
-                float value = bytes.TakeSingle();
+                value = bytes.TakeSingle();
             }
             else if (type == typeof(Guid))
             {
                 // GUIDs have a size of 16 bytes
                 byte[] b = bytes.TakeBytes(16);
                 // stored in big-endian format
-                return new Guid(b, true);
+                value = new Guid(b, true);
             }
             else if (type.IsArray)
             {
@@ -107,48 +109,14 @@ namespace SlfCommon
                     arr.SetValue(ele, i);
                 }
 
-                return arr;
-            }
-            else if (type == typeof(Guid[]))
-            {
-                int count = bytes.TakeInt();
-
-                Guid[] arr = new Guid[count];
-
-                for (int i = 0; i < count; i++)
-                {
-                    // GUIDs have a size of 16 bytes
-                    byte[] b = bytes.TakeBytes(16);
-                    // stored in big-endian format
-                    arr[i] = new Guid(b, true);
-                }
-            }
-            else if (type == typeof(int[]))
-            {
-                int count = bytes.TakeInt();
-
-                int[] arr = new int[count];
-
-                for (int i = 0; i < count; i++)
-                {
-                    arr[i] = bytes.TakeInt();
-                }
-            }
-            else if (type == typeof(string[]))
-            {
-                int count = bytes.TakeInt();
-
-                string[] arr = new string[count];
-
-                for (int i = 0; i < count; i++)
-                {
-                    arr[i] = bytes.TakeString();
-                }
+                value = arr;
             }
             else
             {
                 throw new SerializationException("Encountered field with unsupported type " + type.Name);
             }
+
+            return value;
         }
 
         /// <summary>
