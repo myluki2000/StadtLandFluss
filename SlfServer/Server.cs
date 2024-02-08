@@ -92,6 +92,11 @@ namespace SlfServer
         private readonly Dictionary<Guid, (IPAddress ipAddress, HeartbeatResponsePacket status, long lastTimestamp)> serverStatuses = new();
 
         /// <summary>
+        /// Set which stores all servers this server knows. Used during election.
+        /// </summary>
+        private readonly HashSet<(Guid id, IPAddress ipAddress)> knownServers = new();
+
+        /// <summary>
         /// Random Number Generator.
         /// </summary>
         private Random rand = new();
@@ -150,13 +155,21 @@ namespace SlfServer
         {
             Leader = null;
 
+            heartbeatTimer?.Dispose();
+
             StartElectionPacket startElectionPacket = new(ServerId);
 
             State = ServerState.ELECTION_STARTED;
 
-            // TODO: Change election messages to TCP? (except first one after startup whebn server doesn't know other servers)
-            // multicast send start election packets to other servers and wait for a response
-            networkingClient.SendOneOffToGroup(startElectionPacket);
+            // TODO: Change election messages to TCP
+            // send start election packets to servers with higher ID than ourselves and wait for a response
+            foreach ((Guid id, IPAddress ipAddress) knownServer in knownServers)
+            {
+                if (knownServer.id > ServerId)
+                {
+                    networkingClient.SendOneOff(startElectionPacket, knownServer.ipAddress);
+                }
+            }
 
             await Task.Delay(1000);
 
@@ -202,6 +215,13 @@ namespace SlfServer
 
                 Console.WriteLine("[ServerGroup-Client] Received a packet of type " + packet.GetType().Name);
 
+                // RequestMatchAssignmentPackets are sent by clients, so these are ignored. For all other packet types, it means
+                // they were sent by a server so we add that server to the knownServers set
+                if (packet is not RequestMatchAssignmentPacket)
+                {
+                    knownServers.Add((packet.SenderId, sender));
+                }
+
                 if (packet is StartElectionPacket)
                 {
                     // ignore election packets when we have a lower id than the sender
@@ -210,6 +230,7 @@ namespace SlfServer
 
                     ElectionResponsePacket electionResponsePacket = new(ServerId);
                     // send a response to the server the start election packet came from
+                    // TODO: Change to TCP
                     networkingClient.SendOneOff(electionResponsePacket, sender);
 
                     Console.WriteLine("Starting leader election because we received a StartElectionPacket...");
@@ -256,7 +277,7 @@ namespace SlfServer
                 {
                     if (!Leader.HasValue || packet.SenderId != Leader.Value.guid || heartbeatTimer == null)
                     {
-                        Console.WriteLine("Starting leader election because leader who sent a heartbeat message has a lower ID than me...");
+                        Console.WriteLine("Starting leader election because leader who sent the heartbeat wasn't the leader I expected!");
                         StartElection();
                         return;
                     }

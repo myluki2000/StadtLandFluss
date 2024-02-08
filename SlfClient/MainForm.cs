@@ -51,6 +51,10 @@ namespace SlfClient
             {
                 lblOutput.AppendText("- ");
                 lblOutput.AppendText(pair.Key.ToString());
+                
+                if(pair.Key == matchClient.Identity)
+                    lblOutput.AppendText(" (You!)");
+
                 lblOutput.AppendText(" -\n");
 
                 lblOutput.AppendText("City: ");
