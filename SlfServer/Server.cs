@@ -82,7 +82,7 @@ namespace SlfServer
         /// If this server is the leader server, this dictionary will store the latest status message the leader has
         /// received from each server.
         /// </summary>
-        private readonly Dictionary<Guid, (IPAddress ipAddress, HeartbeatResponsePacket status)> serverStatuses = new();
+        private readonly Dictionary<Guid, (IPAddress ipAddress, HeartbeatResponsePacket status, long last_timestamp)> serverStatuses = new();
 
         /// <summary>
         /// Random Number Generator.
@@ -271,7 +271,7 @@ namespace SlfServer
                 else if (packet is HeartbeatResponsePacket heartbeatResponsePacket)
                 {
                     // update this server's (the server the heartbeat response came from) status in the serverStatuses dictionary
-                    serverStatuses[heartbeatResponsePacket.SenderId] = (sender, heartbeatResponsePacket);
+                    serverStatuses[heartbeatResponsePacket.SenderId] = (sender, heartbeatResponsePacket, getCurrentTimeMillis());
                 }
                 else if (packet is RequestMatchAssignmentPacket requestMatchAssignmentPacket)
                 {
@@ -290,6 +290,7 @@ namespace SlfServer
                     // that is the case (This can happen e.g. if the player crashes during the match and they restart their client
                     // and want to continue playing that same match)
                     (Guid id, IPAddress ip) matchServer = serverStatuses
+                        .Where(x => (getCurrentTimeMillis() - x.Value.last_timestamp) < 2000)
                         .Where(x => x.Value.status.CurrentPlayers.Contains(playerId))
                         .Select(x => (x.Key, x.Value.ipAddress))
                         .FirstOrDefault();
@@ -308,6 +309,7 @@ namespace SlfServer
                     {
                         Console.WriteLine("[Match Assignment] Could not find any matches the player is already part of. Finding a server with free slots...");
                         matchServer = serverStatuses
+                            .Where(x => (getCurrentTimeMillis() - x.Value.last_timestamp) < 2000)
                             .Where(x => x.Value.status.CurrentPlayers.Length < x.Value.status.MaxPlayerCount)
                             .Select(x => (x.Key, x.Value.ipAddress))
                             .FirstOrDefault();
@@ -454,6 +456,13 @@ namespace SlfServer
             STARTING,
             ELECTION_STARTED,
             RUNNING
+        }
+
+        private static long getCurrentTimeMillis()
+        {
+            DateTime epochStart = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            long currentTimeMillis = (long)(DateTime.UtcNow - epochStart).TotalMilliseconds;
+            return currentTimeMillis;
         }
     }
 }
