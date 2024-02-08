@@ -208,12 +208,6 @@ namespace SlfCommon.Networking
             return (sender, frame.Payload);
         }
 
-        public void Dispose()
-        {
-            udpClient.Close();
-            udpClient.Dispose();
-        }
-
         private void ReceiveMessages()
         {
             while (true)
@@ -413,6 +407,15 @@ namespace SlfCommon.Networking
 
                 udpClient.Send(bytes.ToArray(), new IPEndPoint(remoteEndpoint.Address, Port));
             }
+        }
+
+        public void Dispose()
+        {
+            if(InMulticastGroup)
+                udpClient.DropMulticastGroup(MulticastAddress!);
+
+            udpClient.Close();
+            udpClient.Dispose();
         }
     }
 }

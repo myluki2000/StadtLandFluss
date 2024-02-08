@@ -63,7 +63,14 @@ namespace SlfServer
         public const byte MAX_PLAYER_COUNT = 2;
         private readonly HashSet<Guid> players = new();
 
+        /// <summary>
+        /// Stores information about the current round.
+        /// </summary>
         private MatchRound? currentRound = null;
+        /// <summary>
+        /// Counts the number of rounds played. Is incremented when a new round starts.
+        /// </summary>
+        private int roundsPlayed = 0;
 
         /// <summary>
         /// Match ID of the currently running match or NULL if no match is currently running.
@@ -397,6 +404,20 @@ namespace SlfServer
                         );
 
                         matchNetworkingClient.SendOrderedReliableToGroup(responsePacket);
+
+                        // wait another 5 seconds before starting the next round
+                        Thread.Sleep(5000);
+
+                        // only start another round if we have played fewer than 3 rounds up till now
+                        if (roundsPlayed < 3)
+                        {
+                            StartRound();
+                        }
+                        else
+                        {
+                            EndMatch();
+                        }
+
                     }).Start();
                 }
                 else if (packet is SubmitWordsPacket submitWordsPacket)
@@ -404,6 +425,8 @@ namespace SlfServer
                     if (currentRound == null)
                         throw new Exception("CurrentRound is null even though we are receiving player answer packets!");
 
+                    // ignore this type of packet if the server isn't currently waiting for player answers (i.e. the round has
+                    // finished but the next one hasn't started yet)
                     if (!currentlyWaitingForPlayerAnswers)
                         continue;
 
@@ -437,15 +460,36 @@ namespace SlfServer
             StartRound();
         }
 
+        /// <summary>
+        /// Ends the current match. Throws an exception if called when no match is running.
+        /// </summary>
+        private void EndMatch()
+        {
+            if (matchId == null)
+                throw new Exception("Tries to end match when no match is running!");
+
+            MatchEndPacket packet = new(ServerId);
+
+            matchId = null;
+            roundsPlayed = 0;
+            currentlyWaitingForPlayerAnswers = false;
+            players.Clear();
+
+            matchNetworkingClient.SendOrderedReliableToGroup(packet);
+        }
+
         private void StartRound()
         {
             const string allowedLetters = "abcdefghijklmnopqrstuvwxyz";
 
             currentRound = new MatchRound(allowedLetters[rand.Next(0, allowedLetters.Length)].ToString());
+            currentlyWaitingForPlayerAnswers = false;
 
             // send round start packet
             RoundStartPacket packet = new(ServerId, currentRound.Letter);
             matchNetworkingClient.SendOrderedReliableToGroup(packet);
+
+            roundsPlayed++;
         }
 
         /// <summary>

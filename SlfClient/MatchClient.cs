@@ -11,7 +11,10 @@ using SlfCommon;
 
 namespace SlfClient
 {
-    public class MatchClient
+    /// <summary>
+    /// Class used by the Stadt Land Fluss game client to connect to and play on the Stadt Land Fluss server network.
+    /// </summary>
+    public class MatchClient : IDisposable
     {
         /// <summary>
         /// Event which is raised when the client joins a match. Argument indicates whether join was accepted or not.
@@ -28,7 +31,11 @@ namespace SlfClient
         /// <summary>
         /// Event which is raised when the client receives the final results of a round from the server.
         /// </summary>
-        public event EventHandler<MatchRound> OnRoundResults;
+        public event EventHandler<MatchRound>? OnRoundResults;
+        /// <summary>
+        /// Event which is raised when the game server signals that the match has ended.
+        /// </summary>
+        public event EventHandler? OnMatchEnd;
 
         /// <summary>
         /// If a round is running, contains the letter for that round. Otherwise null.
@@ -109,7 +116,10 @@ namespace SlfClient
                         Console.WriteLine("Client has been accepted in match on server " + matchServerIp);
                         matchMulticastIp = IPAddress.Parse(matchJoinResponsePacket.MatchMulticastIp);
                         MatchId = matchJoinResponsePacket.MatchId;
-                        networkingClient?.Dispose();
+
+                        // create a new network client which joins the game server's match multicast group instead of the
+                        // server group multicast group
+                        networkingClient.Dispose();
                         Console.WriteLine("Joining match server's multicast group " + matchMulticastIp);
                         networkingClient = new NetworkingClient(Identity, matchMulticastIp, 1338);
                     }
@@ -129,7 +139,7 @@ namespace SlfClient
                     CurrentLetter = roundStartPacket.Letter;
                     OnRoundStarted?.Invoke(this, EventArgs.Empty);
                 }
-                else if (packet is RoundFinishPacket roundFinishPacket)
+                else if (packet is RoundFinishPacket)
                 {
                     CurrentLetter = null;
                     OnRoundFinished?.Invoke(this, EventArgs.Empty);
@@ -167,6 +177,10 @@ namespace SlfClient
 
                     OnRoundResults?.Invoke(this, round);
                 }
+                else if (packet is MatchEndPacket)
+                {
+                    OnMatchEnd?.Invoke(this, EventArgs.Empty);
+                }
                 else
                 {
                     Console.WriteLine("Ignored received packet of type " + packet.GetType().Name);
@@ -180,6 +194,10 @@ namespace SlfClient
             networkingClient.SendOrderedReliableToGroup(packet);
         }
 
-        
+
+        public void Dispose()
+        {
+            networkingClient.Dispose();
+        }
     }
 }

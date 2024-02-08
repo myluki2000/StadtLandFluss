@@ -14,7 +14,7 @@ namespace SlfClient
     {
         private readonly Config config;
 
-        private readonly MatchClient client;
+        private MatchClient? matchClient;
 
         private MainForm? frmMain;
 
@@ -26,13 +26,28 @@ namespace SlfClient
             InitializeComponent();
 
             lblPlayerId.Text = "Player ID: " + config.PlayerId;
+        }
 
-            client = new(config.PlayerId);
+        private void MatchClientOnMatchEnd(object? sender, EventArgs e)
+        {
+            frmMain?.Close();
+            frmMain?.Dispose();
+            frmMain = null;
+
+            if(matchClient != null)
+                matchClient.OnMatchEnd -= MatchClientOnMatchEnd;
+            matchClient?.Dispose();
+            matchClient = null;
+
+            MessageBox.Show("The match has ended.");
         }
 
         private void btnJoinGame_Click(object sender, EventArgs e)
         {
-            client.JoinNewGame();
+            matchClient ??= new(config.PlayerId);
+            matchClient.OnMatchEnd += MatchClientOnMatchEnd;
+
+            matchClient.JoinNewGame();
 
             lblLoading.Text = "Searching game...";
             lblLoading.Visible = true;
@@ -46,12 +61,12 @@ namespace SlfClient
                 lblLoading.Visible = false;
 
                 // check if we actually connected
-                if (client.IsInMatch)
+                if (matchClient.IsInMatch)
                 {
                     // if we did, open the main window to start playing
                     Console.WriteLine("AAAAAAAAAAAAAAAAAAAAA");
                     frmMain?.Dispose();
-                    frmMain = new MainForm(client);
+                    frmMain = new MainForm(matchClient);
                     frmMain.ShowDialog();
                 }
                 else
