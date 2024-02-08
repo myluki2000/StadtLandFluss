@@ -409,6 +409,19 @@ namespace SlfCommon.Networking
             }
         }
 
+        /// <summary>
+        /// Resets the network client's state for ordered reliable mutlicast. I.e. resets sequence numbers, deletes all sent and received messages etc.
+        /// </summary>
+        public void Reset()
+        {
+            holdbackList.Clear();
+            while (deliveryQueue.Count > 0)
+                deliveryQueue.Take();
+            remoteSequenceNumbers.Clear();
+            sequenceNumber = 0;
+            sentPackets.Clear();
+        }
+
         public void Dispose()
         {
             if(InMulticastGroup)

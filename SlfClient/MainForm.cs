@@ -37,45 +37,53 @@ namespace SlfClient
             btnFinish.Enabled = true;
         }
 
-        private void MatchClientOnRoundResults(object? sender, MatchRound round)
+        private void MatchClientOnRoundResults(object? sender, MatchRound _)
         {
-            lblOutput.AppendText("----- Round -----\n");
+            lblOutput.Text = "";
 
-            lblOutput.AppendText("Starting Letter: ");
-            lblOutput.AppendText(round.Letter);
-            lblOutput.AppendText("\n\n");
-
-            lblOutput.AppendText("Results:\n");
-
-            foreach (KeyValuePair<Guid, MatchRound.Answers> pair in round.PlayerAnswers)
+            int i = 0;
+            foreach (MatchRound round in matchClient.FinishedRounds)
             {
-                lblOutput.AppendText("- ");
-                lblOutput.AppendText(pair.Key.ToString());
-                
-                if(pair.Key == matchClient.Identity)
-                    lblOutput.AppendText(" (You!)");
+                i++;
 
-                lblOutput.AppendText(" -\n");
+                lblOutput.AppendText("----- Round " + i + " -----\n");
 
-                lblOutput.AppendText("City: ");
-                lblOutput.SelectionColor = pair.Value.City.Accepted ? Color.Green : Color.Red;
-                lblOutput.AppendText(pair.Value.City.Text);
-                lblOutput.AppendText(pair.Value.City.Accepted ? " \u2714\n" : "\u2718\n");
-                lblOutput.SelectionColor = SystemColors.WindowText;
+                lblOutput.AppendText("Starting Letter: ");
+                lblOutput.AppendText(round.Letter);
+                lblOutput.AppendText("\n\n");
 
-                lblOutput.AppendText("Country: ");
-                lblOutput.SelectionColor = pair.Value.Country.Accepted ? Color.Green : Color.Red;
-                lblOutput.AppendText(pair.Value.Country.Text);
-                lblOutput.AppendText(pair.Value.Country.Accepted ? " \u2714\n" : "\u2718\n");
-                lblOutput.SelectionColor = SystemColors.WindowText;
+                lblOutput.AppendText("Results:\n");
 
-                lblOutput.AppendText("River: ");
-                lblOutput.SelectionColor = pair.Value.River.Accepted ? Color.Green : Color.Red;
-                lblOutput.AppendText(pair.Value.River.Text);
-                lblOutput.AppendText(pair.Value.River.Accepted ? " \u2714\n" : "\u2718\n");
-                lblOutput.SelectionColor = SystemColors.WindowText;
+                foreach (KeyValuePair<Guid, MatchRound.Answers> pair in round.PlayerAnswers)
+                {
+                    lblOutput.AppendText("- ");
+                    lblOutput.AppendText(pair.Key.ToString());
 
-                lblOutput.AppendText("\n");
+                    if (pair.Key == matchClient.Identity)
+                        lblOutput.AppendText(" (You!)");
+
+                    lblOutput.AppendText(" -\n");
+
+                    lblOutput.AppendText("City: ");
+                    lblOutput.SelectionColor = pair.Value.City.Accepted ? Color.Green : Color.Red;
+                    lblOutput.AppendText(pair.Value.City.Text);
+                    lblOutput.AppendText(pair.Value.City.Accepted ? " \u2714\n" : "\u2718\n");
+                    lblOutput.SelectionColor = SystemColors.WindowText;
+
+                    lblOutput.AppendText("Country: ");
+                    lblOutput.SelectionColor = pair.Value.Country.Accepted ? Color.Green : Color.Red;
+                    lblOutput.AppendText(pair.Value.Country.Text);
+                    lblOutput.AppendText(pair.Value.Country.Accepted ? " \u2714\n" : "\u2718\n");
+                    lblOutput.SelectionColor = SystemColors.WindowText;
+
+                    lblOutput.AppendText("River: ");
+                    lblOutput.SelectionColor = pair.Value.River.Accepted ? Color.Green : Color.Red;
+                    lblOutput.AppendText(pair.Value.River.Text);
+                    lblOutput.AppendText(pair.Value.River.Accepted ? " \u2714\n" : "\u2718\n");
+                    lblOutput.SelectionColor = SystemColors.WindowText;
+
+                    lblOutput.AppendText("\n");
+                }
             }
         }
 
@@ -88,8 +96,11 @@ namespace SlfClient
         private void SubmitWords()
         {
             matchClient.SubmitWords(tbCity.Text, tbCountry.Text, tbRiver.Text);
+            tbCity.Text = "";
             tbCity.Enabled = false;
+            tbCountry.Text = "";
             tbCountry.Enabled = false;
+            tbRiver.Text = "";
             tbRiver.Enabled = false;
             btnFinish.Enabled = false;
         }

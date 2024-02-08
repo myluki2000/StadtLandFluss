@@ -497,6 +497,7 @@ namespace SlfServer
             players.Clear();
 
             matchNetworkingClient.SendOrderedReliableToGroup(packet);
+            matchNetworkingClient.Reset();
         }
 
         private void StartRound()
