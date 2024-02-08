@@ -14,8 +14,22 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 9;
 
+        /// <summary>
+        /// ID of the match this packet is related to.
+        /// </summary>
+        public readonly Guid MatchId;
+
+        /// <summary>
+        /// Answer for the "city" category this player gave.
+        /// </summary>
         public readonly string City;
+        /// <summary>
+        /// Answer for the "country" category this player gave.
+        /// </summary>
         public readonly string Country;
+        /// <summary>
+        /// Answer for the "river" category this player gave.
+        /// </summary>
         public readonly string River;
 
         /// <summary>
@@ -23,8 +37,9 @@ namespace SlfCommon.Networking.Packets
         /// </summary>
         public SubmitWordsPacket() {}
 
-        public SubmitWordsPacket(Guid senderId, string city, string country, string river) : base(senderId)
+        public SubmitWordsPacket(Guid senderId, Guid matchId, string city, string country, string river) : base(senderId)
         {
+            MatchId = matchId;
             City = city;
             Country = country;
             River = river;

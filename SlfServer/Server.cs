@@ -404,6 +404,10 @@ namespace SlfServer
                 }
                 else if (packet is RoundFinishPacket roundFinishPacket)
                 {
+                    // ignore this packet if it is not related to the match running on this server
+                    if (roundFinishPacket.MatchId != matchId)
+                        continue;
+
                     currentlyWaitingForPlayerAnswers = true;
 
                     new Thread(() =>
@@ -414,12 +418,17 @@ namespace SlfServer
                         // we're not accepting any more answers!
                         currentlyWaitingForPlayerAnswers = false;
 
+                        if (matchId == null)
+                            throw new Exception(
+                                "MatchID is null even though we received a RoundFinishPacket! This should never happen!");
+
                         if (currentRound == null)
                             throw new Exception("CurrentRound is null even though we are receiving player answer packets!");
 
                         // send the results packet
                         RoundResultPacket responsePacket = new(
                             ServerId,
+                            matchId.Value,
                             currentRound.Letter,
                             currentRound.PlayerAnswers.Select(x => (x.Key, x.Value)).ToList()
                         );
@@ -445,6 +454,10 @@ namespace SlfServer
                 {
                     if (currentRound == null)
                         throw new Exception("CurrentRound is null even though we are receiving player answer packets!");
+
+                    // ignore this packet if it is not related to the match running on this server
+                    if(submitWordsPacket.MatchId != matchId)
+                        continue;
 
                     // ignore this type of packet if the server isn't currently waiting for player answers (i.e. the round has
                     // finished but the next one hasn't started yet)
@@ -487,9 +500,9 @@ namespace SlfServer
         private void EndMatch()
         {
             if (matchId == null)
-                throw new Exception("Tries to end match when no match is running!");
+                throw new Exception("Tried to end match when no match is running!");
 
-            MatchEndPacket packet = new(ServerId);
+            MatchEndPacket packet = new(ServerId, matchId.Value);
 
             matchId = null;
             roundsPlayed = 0;
@@ -507,8 +520,12 @@ namespace SlfServer
             currentRound = new MatchRound(allowedLetters[rand.Next(0, allowedLetters.Length)].ToString());
             currentlyWaitingForPlayerAnswers = false;
 
+            if (matchId == null)
+                throw new Exception(
+                    "MatchID is null even though we want to start a round! This should never happen!");
+
             // send round start packet
-            RoundStartPacket packet = new(ServerId, currentRound.Letter);
+            RoundStartPacket packet = new(ServerId, matchId.Value, currentRound.Letter);
             matchNetworkingClient.SendOrderedReliableToGroup(packet);
 
             roundsPlayed++;

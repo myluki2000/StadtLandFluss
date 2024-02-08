@@ -13,7 +13,15 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 188;
 
-        public MatchEndPacket(Guid senderId) : base(senderId) { }
+        /// <summary>
+        /// ID of the match this packet is related to.
+        /// </summary>
+        public readonly Guid MatchId;
+
+        public MatchEndPacket(Guid senderId, Guid matchId) : base(senderId)
+        {
+            MatchId = matchId;
+        }
 
         /// <summary>
         /// Should only be used by reflection to create new object of this type.

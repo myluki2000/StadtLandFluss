@@ -15,16 +15,45 @@ namespace SlfCommon.Networking.Packets
     {
         public const byte PacketTypeId = 10;
 
+        /// <summary>
+        /// ID of the match this packet is related to.
+        /// </summary>
+        public readonly Guid MatchId;
+
+        /// <summary>
+        /// Letter with which the words had to start this round.
+        /// </summary>
         public readonly string Letter;
 
+        /// <summary>
+        /// Array containing the PlayerIDs of the players who took part in this round.
+        /// </summary>
         public readonly Guid[] Players;
 
+        /// <summary>
+        /// Array containing the answers for the "cities" category the players have submitted. In the same order as the "Players" array.
+        /// </summary>
         public readonly string[] Cities;
+        /// <summary>
+        /// Array containing the answers for the "countries" category the players have submitted. In the same order as the "Players" array.
+        /// </summary>
         public readonly string[] Countries;
+        /// <summary>
+        /// Array containing the answers for the "rivers" category the players have submitted. In the same order as the "Players" array.
+        /// </summary>
         public readonly string[] Rivers;
 
+        /// <summary>
+        /// Boolean array indicating which of the answers were accepted by the server and which weren't.
+        /// </summary>
         public readonly bool[] CitiesAccepted;
+        /// <summary>
+        /// Boolean array indicating which of the answers were accepted by the server and which weren't.
+        /// </summary>
         public readonly bool[] CountriesAccepted;
+        /// <summary>
+        /// Boolean array indicating which of the answers were accepted by the server and which weren't.
+        /// </summary>
         public readonly bool[] RiversAccepted;
 
         /// <summary>
@@ -32,8 +61,9 @@ namespace SlfCommon.Networking.Packets
         /// </summary>
         public RoundResultPacket() { }
 
-        public RoundResultPacket(Guid senderId, string letter, Guid[] players, string[] cities, string[] countries, string[] rivers) : base(senderId)
+        public RoundResultPacket(Guid senderId, Guid matchId, string letter, Guid[] players, string[] cities, string[] countries, string[] rivers) : base(senderId)
         {
+            MatchId = matchId;
             Letter = letter;
             Players = players;
             Cities = cities;
@@ -41,8 +71,9 @@ namespace SlfCommon.Networking.Packets
             Rivers = rivers;
         }
 
-        public RoundResultPacket(Guid senderId, string letter, List<(Guid player, MatchRound.Answers answers)> playerAnswers) : base(senderId)
+        public RoundResultPacket(Guid senderId, Guid matchId, string letter, List<(Guid player, MatchRound.Answers answers)> playerAnswers) : base(senderId)
         {
+            MatchId = matchId;
             Letter = letter;
 
             Players = playerAnswers.Select(x => x.player).ToArray();

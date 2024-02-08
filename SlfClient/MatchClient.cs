@@ -8,6 +8,7 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using SlfCommon;
+using System.Text.RegularExpressions;
 
 namespace SlfClient
 {
@@ -83,7 +84,11 @@ namespace SlfClient
 
         public void SubmitWords(string city, string country, string river)
         {
-            SubmitWordsPacket packet = new(Identity, city, country, river);
+            if (MatchId == null)
+                throw new Exception(
+                    "Tried to submit words even though MatchClient doesn't have a MatchID (are we even part of a match?)");
+
+            SubmitWordsPacket packet = new(Identity, MatchId.Value, city, country, river);
 
             networkingClient.SendOrderedReliableToGroup(packet);
         }
@@ -136,16 +141,28 @@ namespace SlfClient
                 }
                 else if (packet is RoundStartPacket roundStartPacket)
                 {
+                    // ignore this packet if it is not related to the match this client is partaking in
+                    if (roundStartPacket.MatchId != MatchId)
+                        continue;
+
                     CurrentLetter = roundStartPacket.Letter;
                     OnRoundStarted?.Invoke(this, EventArgs.Empty);
                 }
-                else if (packet is RoundFinishPacket)
+                else if (packet is RoundFinishPacket roundFinishPacket)
                 {
+                    // ignore this packet if it is not related to the match this client is partaking in
+                    if (roundFinishPacket.MatchId != MatchId)
+                        continue;
+
                     CurrentLetter = null;
                     OnRoundFinished?.Invoke(this, EventArgs.Empty);
                 }
                 else if (packet is RoundResultPacket roundResultPacket)
                 {
+                    // ignore this packet if it is not related to the match this client is partaking in
+                    if (roundResultPacket.MatchId != MatchId)
+                        continue;
+
                     MatchRound round = new(roundResultPacket.Letter);
 
                     int playerCount = roundResultPacket.Players.Length;
@@ -177,8 +194,12 @@ namespace SlfClient
 
                     OnRoundResults?.Invoke(this, round);
                 }
-                else if (packet is MatchEndPacket)
+                else if (packet is MatchEndPacket matchEndPacket)
                 {
+                    // ignore this packet if it is not related to the match this client is partaking in
+                    if (matchEndPacket.MatchId != MatchId)
+                        continue;
+
                     OnMatchEnd?.Invoke(this, EventArgs.Empty);
                 }
                 else
@@ -190,7 +211,12 @@ namespace SlfClient
 
         public void FinishRound()
         {
-            RoundFinishPacket packet = new(Identity);
+            if (MatchId == null)
+                throw new Exception(
+                    "Tried to finish a round even though MatchClient doesn't have a MatchID (are we even part of a match?)");
+            
+
+            RoundFinishPacket packet = new(Identity, MatchId.Value);
             networkingClient.SendOrderedReliableToGroup(packet);
         }
 

@@ -15,12 +15,18 @@ namespace SlfCommon.Networking.Packets
         public const byte PacketTypeId = 8;
 
         /// <summary>
+        /// ID of the match this packet is related to.
+        /// </summary>
+        public Guid MatchId;
+
+        /// <summary>
         /// Empty constructor used by reflection.
         /// </summary>
         public RoundFinishPacket() {}
 
-        public RoundFinishPacket(Guid senderId) : base(senderId)
+        public RoundFinishPacket(Guid senderId, Guid matchId) : base(senderId)
         {
+            MatchId = matchId;
         }
 
         public override byte GetPacketTypeId()
