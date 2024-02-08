@@ -102,9 +102,6 @@ namespace SlfServer
             receiveThread = new Thread(ReceiveNetworkingMessages);
             receiveThread.Start();
 
-            matchReceiveThread = new Thread(ReceiveMatchNetworkingMessages);
-            matchReceiveThread.Start();
-
             // generate a multicast IP for the match run by this server
             IPAddress matchMulticastAddress;
             while (true)
@@ -121,6 +118,9 @@ namespace SlfServer
             }
 
             matchNetworkingClient = new(ServerId, matchMulticastAddress, 1338);
+
+            matchReceiveThread = new Thread(ReceiveMatchNetworkingMessages);
+            matchReceiveThread.Start();
 
             // start match heartbeat timer
             matchHeartbeatTimer = new Timer(500)
@@ -193,7 +193,7 @@ namespace SlfServer
             {
                 (IPAddress sender, SlfPacketBase packet) = networkingClient.Receive();
 
-                Console.WriteLine("Received a packet of type " + packet.GetType().Name);
+                Console.WriteLine("[ServerGroup-Client] Received a packet of type " + packet.GetType().Name);
 
                 if (packet is StartElectionPacket)
                 {
@@ -348,6 +348,8 @@ namespace SlfServer
             {
                 (IPAddress sender, SlfPacketBase packet) = matchNetworkingClient.Receive();
 
+                Console.WriteLine("[MatchGroup-Client] Received a packet of type " + packet.GetType().Name);
+
                 if (packet is MatchJoinPacket matchJoinPacket)
                 {
                     // either a slot has to be free for the player, or they already need to be part of the match
@@ -368,7 +370,7 @@ namespace SlfServer
                         StartMatch();
 
                     MatchJoinResponsePacket response = new(ServerId, accept, matchNetworkingClient.MulticastAddress?.ToString(), matchId);
-                    matchNetworkingClient.SendOneOff(response, sender);
+                    matchNetworkingClient.SendOneOff(response, sender, 1337);
                 }
                 else if (packet is RoundFinishPacket roundFinishPacket)
                 {
