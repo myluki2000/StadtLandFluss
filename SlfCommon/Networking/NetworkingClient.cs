@@ -303,13 +303,6 @@ namespace SlfCommon.Networking
                 + ", seq no=" + frame.SequenceNumber
                 + ", packet type=" + frame.Payload.GetType().Name + ").");
 
-            // TODO: This is just for testing. Can be removed
-            if (frame.Payload is RoundStartPacket roundStartPacket)
-            {
-                Console.WriteLine("Frame Sender: " + remoteEndpoint);
-                Console.WriteLine(ObjectDumper.Dump(roundStartPacket));
-            }
-
             // if we don't have any sequence number for this remote endpoint yet, assume we have sequence number 0 stored
             if (!remoteSequenceNumbers.TryGetValue((remoteEndpoint.Address, frame.SenderId), out int storedSequenceNumber))
             {

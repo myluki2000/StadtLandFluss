@@ -43,19 +43,43 @@ namespace SlfClient
         /// </summary>
         public string? CurrentLetter { get; private set; }
 
+        /// <summary>
+        /// List containing data about the rounds we have played in this match.
+        /// </summary>
         public List<MatchRound> FinishedRounds { get; } = new();
 
+        /// <summary>
+        /// Our Player ID.
+        /// </summary>
         public Guid Identity { get; }
 
+        /// <summary>
+        /// Networking Client used to communicate with servers.
+        /// </summary>
         private NetworkingClient networkingClient;
 
+        /// <summary>
+        /// Thread which processes messages received by the networkingClient.
+        /// </summary>
         private Thread receiveThread;
 
+        /// <summary>
+        /// ID of the server we are playing on. NULL if a server to play on hasn't been selected yet.
+        /// </summary>
         private Guid? matchServerId = null;
+        /// <summary>
+        /// IP of the server we are playing on. NULL if a server to play on hasn't been selected yet.
+        /// NULL if we currently aren't in a match.
+        /// </summary>
         private IPAddress? matchServerIp = null;
-
+        /// <summary>
+        /// Multicast IP-Address used to communicate during a match with players and the match server.
+        /// NULL if we currently aren't in a match.
+        /// </summary>
         private IPAddress? matchMulticastIp = null;
-
+        /// <summary>
+        /// ID of the match we are playing in. NULL if we are not currently partaking in a match.
+        /// </summary>
         public Guid? MatchId = null;
 
         /// <summary>
@@ -72,6 +96,9 @@ namespace SlfClient
             receiveThread.Start();
         }
 
+        /// <summary>
+        /// Send a request to join a new game (get assigned a server to play on).
+        /// </summary>
         public void JoinNewGame()
         {
             RequestMatchAssignmentPacket packet = new(Identity);
@@ -82,6 +109,11 @@ namespace SlfClient
             networkingClient.SendOneOff(packet, IPAddress.Parse("239.0.0.1"));
         }
 
+        /// <summary>
+        /// Submit the specified words. Should only be called after we have confirmed that the round has finished
+        /// (i.e. RoundFinishPacket has been received), otherwise the submitted words will not be considered by
+        /// the server.
+        /// </summary>
         public void SubmitWords(string city, string country, string river)
         {
             if (MatchId == null)
@@ -93,6 +125,9 @@ namespace SlfClient
             networkingClient.SendOrderedReliableToGroup(packet);
         }
 
+        /// <summary>
+        /// Looping method of the networkingClient receive thread.
+        /// </summary>
         private void ReceiveNetworkingMessages()
         {
             while (true)
@@ -109,6 +144,8 @@ namespace SlfClient
                         ? sender 
                         : IPAddress.Parse(matchAssignmentPacket.MatchServerIp);
 
+                    // after getting assigned to a match server by the leader, we send a MatchJoinPacket to that match server
+                    // to notify it that we will now take part in the match.
                     MatchJoinPacket matchJoinPacket = new(Identity);
                     networkingClient.SendOneOff(matchJoinPacket, matchServerIp, 1338);
                 }
@@ -130,6 +167,7 @@ namespace SlfClient
                     }
                     else
                     {
+                        // reset everything if the server doesn't let us play on it :(
                         Console.WriteLine("Client has been denied to join match on server " + matchServerIp);
                         matchMulticastIp = null;
                         MatchId = null;
@@ -163,6 +201,8 @@ namespace SlfClient
                     if (roundResultPacket.MatchId != MatchId)
                         continue;
 
+                    // construct the MatchRound data structure we use internally to store match information
+                    // from the data we received in the packet
                     MatchRound round = new(roundResultPacket.Letter);
 
                     int playerCount = roundResultPacket.Players.Length;
@@ -209,6 +249,10 @@ namespace SlfClient
             }
         }
 
+        /// <summary>
+        /// Sends a message to all clients partaking in the match (and the server), we have ended the round.
+        /// </summary>
+        /// <exception cref="Exception"></exception>
         public void FinishRound()
         {
             if (MatchId == null)

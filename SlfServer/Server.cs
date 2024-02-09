@@ -20,15 +20,37 @@ namespace SlfServer
     {
         public Guid ServerId = Guid.NewGuid();
 
+        /// <summary>
+        /// TcpListener used for Bully election.
+        /// </summary>
+        private readonly TcpListener tcpListener; // TODO: Rest of the fucking owl
+
+        /// <summary>
+        /// Ordered reliable multicast networking client used for communication between this server and other servers.
+        /// </summary>
         private readonly NetworkingClient networkingClient;
+        /// <summary>
+        /// Ordered reliable multicast networking client used for communication between this servers and clients partaking in the match.
+        /// </summary>
         private readonly NetworkingClient matchNetworkingClient;
 
+        /// <summary>
+        /// State of the server.
+        /// </summary>
         private ServerState State = ServerState.STARTING;
 
+        /// <summary>
+        /// Thread used to handle received messages of the networkingClient.
+        /// </summary>
         private Thread receiveThread;
+        /// <summary>
+        /// Thread used to handle received message of the matchNetworkingClient.
+        /// </summary>
         private Thread matchReceiveThread;
 
-        private (Guid guid, IPAddress ip)? _leader = null;
+        /// <summary>
+        /// ID and IP Address of the current leader or null if no leader is decided (or this server doesn't know about it!)
+        /// </summary>
         private (Guid guid, IPAddress ip)? Leader
         {
             get => _leader;
@@ -48,6 +70,7 @@ namespace SlfServer
                     Console.WriteLine("Leader unset.");
             }
         }
+        private (Guid guid, IPAddress ip)? _leader = null;
 
         /// <summary>
         /// For the leader, this timer regularly sends out the heartbeat.
@@ -60,7 +83,15 @@ namespace SlfServer
         /// </summary>
         private Timer? matchHeartbeatTimer = null;
 
+        /// <summary>
+        /// How many players can partake in a match.
+        /// </summary>
         public const byte MAX_PLAYER_COUNT = 2;
+
+        /// <summary>
+        /// Set containing the PlayerIDs of all players partaking in the current match. Also includes players
+        /// which are not currently connected.
+        /// </summary>
         private readonly HashSet<Guid> players = new();
 
         /// <summary>
@@ -129,6 +160,7 @@ namespace SlfServer
                     break;
             }
 
+            // set up a networking client for communicating with players in the match
             matchNetworkingClient = new(ServerId, matchMulticastAddress, 1338);
 
             matchReceiveThread = new Thread(ReceiveMatchNetworkingMessages);
@@ -143,6 +175,7 @@ namespace SlfServer
             {
                 if (matchNetworkingClient.InMulticastGroup)
                 {
+                    // regularly send a heartbeat to the players in the match
                     matchNetworkingClient.SendHeartbeatToGroup();
                 }
             };
@@ -153,6 +186,7 @@ namespace SlfServer
 
         public async void StartElection()
         {
+            // the king is dead
             Leader = null;
 
             heartbeatTimer?.Dispose();
@@ -253,6 +287,7 @@ namespace SlfServer
                         continue;
                     }
 
+                    // long live the king
                     Leader = (packet.SenderId, sender);
 
                     heartbeatTimer?.Dispose();
@@ -286,6 +321,7 @@ namespace SlfServer
                     heartbeatTimer.Stop();
                     heartbeatTimer.Start();
 
+                    // send a response to the heartbeat, containing some information about us and our current match status
                     HeartbeatResponsePacket heartbeatResponse = new(ServerId)
                     {
                         HasMatchRunning = matchId != null,
@@ -294,7 +330,7 @@ namespace SlfServer
                         CurrentPlayers = players.ToArray(),
                     };
 
-                    networkingClient.SendOneOff(heartbeatResponse, Leader.Value.ip);
+                    networkingClient.SendOneOffToGroup(heartbeatResponse);
                 }
                 else if (packet is HeartbeatResponsePacket heartbeatResponsePacket)
                 {
@@ -318,7 +354,7 @@ namespace SlfServer
                     // that is the case (This can happen e.g. if the player crashes during the match and they restart their client
                     // and want to continue playing that same match)
                     (Guid id, IPAddress ip) matchServer = serverStatuses
-                        .Where(x => (getCurrentTimeMillis() - x.Value.lastTimestamp) < 2000)
+                        .Where(x => (getCurrentTimeMillis() - x.Value.lastTimestamp) < 2000) // skip server if we haven't received a heartbeat for >2sec
                         .Where(x => x.Value.status.CurrentPlayers.Contains(playerId))
                         .Select(x => (x.Key, x.Value.ipAddress))
                         .FirstOrDefault();
@@ -337,7 +373,7 @@ namespace SlfServer
                     {
                         Console.WriteLine("[Match Assignment] Could not find any matches the player is already part of. Finding a server with free slots...");
                         matchServer = serverStatuses
-                            .Where(x => (getCurrentTimeMillis() - x.Value.lastTimestamp) < 2000)
+                            .Where(x => (getCurrentTimeMillis() - x.Value.lastTimestamp) < 2000) // skip server if we haven't received a heartbeat for >2sec
                             .Where(x => x.Value.status.CurrentPlayers.Length < x.Value.status.MaxPlayerCount)
                             .Select(x => (x.Key, x.Value.ipAddress))
                             .FirstOrDefault();
@@ -504,12 +540,15 @@ namespace SlfServer
 
             MatchEndPacket packet = new(ServerId, matchId.Value);
 
+            // delete/reset all our match-specific data
             matchId = null;
             roundsPlayed = 0;
             currentlyWaitingForPlayerAnswers = false;
             players.Clear();
 
+            // send match end packet to notify players that the match has ended
             matchNetworkingClient.SendOrderedReliableToGroup(packet);
+            // reset the networking client so it's ready to take on a new match
             matchNetworkingClient.Reset();
         }
 
