@@ -6,10 +6,19 @@ using System.Threading.Tasks;
 
 namespace SlfClient
 {
+    /// <summary>
+    /// Loads/saves a config to/from a file.
+    /// </summary>
     public class Config
     {
+        /// <summary>
+        /// ID uniquely identifying this player.
+        /// </summary>
         public Guid PlayerId { get; }
 
+        /// <summary>
+        /// File Path of the config file.
+        /// </summary>
         public string ConfigPath { get; }
 
         public Config(string path)

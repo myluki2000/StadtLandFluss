@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using SlfCommon;
 using System.Text.RegularExpressions;
+using Timer = System.Timers.Timer;
 
 namespace SlfClient
 {
@@ -37,6 +38,10 @@ namespace SlfClient
         /// Event which is raised when the game server signals that the match has ended.
         /// </summary>
         public event EventHandler? OnMatchEnd;
+        /// <summary>
+        /// Event which is raised when connection to the server is lost (i.e. heartbeat packets do not arrive for a while).
+        /// </summary>
+        public event EventHandler? OnServerConnectionLost;
 
         /// <summary>
         /// If a round is running, contains the letter for that round. Otherwise null.
@@ -87,6 +92,11 @@ namespace SlfClient
         /// </summary>
         public bool IsInMatch => MatchId != null;
 
+        /// <summary>
+        /// Timer used to check if the heartbeat of the game server is still there.
+        /// </summary>
+        private readonly Timer heartbeatTimer;
+
         public MatchClient(Guid identity)
         {
             Identity = identity;
@@ -94,6 +104,14 @@ namespace SlfClient
 
             receiveThread = new Thread(ReceiveNetworkingMessages);
             receiveThread.Start();
+
+            heartbeatTimer = new Timer(2000);
+            heartbeatTimer.Elapsed += (sender, args) =>
+            {
+                // if this timer elapses it means we haven't received a heartbeat from the server for more than the timer duration
+                // let's raise an event for that!
+                OnServerConnectionLost?.Invoke(this, EventArgs.Empty);
+            };
         }
 
         /// <summary>
@@ -159,11 +177,14 @@ namespace SlfClient
                         matchMulticastIp = IPAddress.Parse(matchJoinResponsePacket.MatchMulticastIp);
                         MatchId = matchJoinResponsePacket.MatchId;
 
+                        heartbeatTimer.Start();
+
                         // create a new network client which joins the game server's match multicast group instead of the
                         // server group multicast group
                         networkingClient.Dispose();
                         Console.WriteLine("Joining match server's multicast group " + matchMulticastIp);
                         networkingClient = new NetworkingClient(Identity, matchMulticastIp, 1338);
+                        networkingClient.OnMulticastHeartbeatReceived += NetworkingClientOnMulticastHeartbeatReceived;
                     }
                     else
                     {
@@ -173,6 +194,8 @@ namespace SlfClient
                         MatchId = null;
                         matchServerIp = null;
                         matchServerId = null;
+
+                        heartbeatTimer.Stop();
                     }
 
                     OnMatchJoinResponse?.Invoke(this, matchJoinResponsePacket.Accepted);
@@ -240,6 +263,8 @@ namespace SlfClient
                     if (matchEndPacket.MatchId != MatchId)
                         continue;
 
+                    heartbeatTimer.Stop();
+
                     OnMatchEnd?.Invoke(this, EventArgs.Empty);
                 }
                 else
@@ -247,6 +272,13 @@ namespace SlfClient
                     Console.WriteLine("Ignored received packet of type " + packet.GetType().Name);
                 }
             }
+        }
+
+        private void NetworkingClientOnMulticastHeartbeatReceived(object? sender, IPEndPoint e)
+        {
+            // reset the heartbeat timeout
+            heartbeatTimer.Stop();
+            heartbeatTimer.Start();
         }
 
         /// <summary>
@@ -268,6 +300,7 @@ namespace SlfClient
         public void Dispose()
         {
             networkingClient.Dispose();
+            heartbeatTimer.Dispose();
         }
     }
 }

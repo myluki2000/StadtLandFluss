@@ -314,7 +314,7 @@ namespace SlfServer
                     {
                         Console.WriteLine("Starting leader election because leader who sent the heartbeat wasn't the leader I expected!");
                         StartElection();
-                        return;
+                        continue;
                     }
 
                     // received a heartbeat from the leader, so reset the timer

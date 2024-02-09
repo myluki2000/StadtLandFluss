@@ -13,6 +13,9 @@ namespace SlfClient
 {
     public partial class StartForm : Form
     {
+        /// <summary>
+        /// Loaded player client config.
+        /// </summary>
         private readonly Config config;
 
         private MatchClient? matchClient;
@@ -31,11 +34,38 @@ namespace SlfClient
 
         private void MatchClientOnMatchEnd(object? sender, EventArgs e)
         {
+            Invoke(() => EndMatch());
+        }
+
+        private void MatchClientOnServerConnectionLost(object? sender, EventArgs e)
+        {
+            Invoke(() => EndMatch("Connection to server was lost."));
+        }
+
+        /// <summary>
+        /// Helper method to call when a match has ended for whatever reason to display final results and afterwards bring
+        /// the client back into a state where it can connect to a new match. Optionally, a reason for the match ending can
+        /// be provided which will be displayed to the user.
+        /// </summary>
+        private void EndMatch(string? reason = null)
+        {
             frmMain?.Close();
             frmMain?.Dispose();
             frmMain = null;
 
-            StringBuilder sb = new("The match has ended. Final scores:");
+            StringBuilder sb = new();
+
+            if (reason == null)
+            {
+                sb.Append("The match has ended.");
+            }
+            else
+            {
+                sb.Append("The match has ended for the following reason: ");
+                sb.Append(reason);
+            }
+
+            sb.AppendLine("Final scores:");
 
             // score calculation as described in the game rules in our report
             Dictionary<Guid, int> playerScores = new();
@@ -103,10 +133,15 @@ namespace SlfClient
                             riverScore = 20;
                     }
 
+                    // if player not yet in dictionary, initialize with 0
+                    playerScores.TryAdd(playerId, 0);
+
+                    // add scores from this round to player's total score
                     playerScores[playerId] += cityScore + countryScore + riverScore;
                 }
             }
 
+            // generate the printout displayed after the match
             foreach ((Guid playerId, int score) in playerScores)
             {
                 sb.Append("\n");
@@ -118,13 +153,17 @@ namespace SlfClient
                 sb.Append(" Points");
             }
 
-
+            // clean-up before we dispose of the match client
             if (matchClient != null)
+            {
                 matchClient.OnMatchEnd -= MatchClientOnMatchEnd;
+                matchClient.OnServerConnectionLost -= MatchClientOnServerConnectionLost;
+            }
+
             matchClient?.Dispose();
             matchClient = null;
 
-
+            // Show the message box with our generated printout
             MessageBox.Show(sb.ToString());
         }
 
@@ -132,6 +171,7 @@ namespace SlfClient
         {
             matchClient ??= new(config.PlayerId);
             matchClient.OnMatchEnd += MatchClientOnMatchEnd;
+            matchClient.OnServerConnectionLost += MatchClientOnServerConnectionLost;
 
             matchClient.JoinNewGame();
 
@@ -143,23 +183,25 @@ namespace SlfClient
                 // give it 6 seconds to connect to a game
                 Thread.Sleep(6000);
 
-                // hide the loading screen
-                lblLoading.Visible = false;
+                Invoke(() =>
+                {
+                    // hide the loading screen
+                    lblLoading.Visible = false;
 
-                // check if we actually connected
-                if (matchClient.IsInMatch)
-                {
-                    // if we did, open the main window to start playing
-                    Console.WriteLine("AAAAAAAAAAAAAAAAAAAAA");
-                    frmMain?.Dispose();
-                    frmMain = new MainForm(matchClient);
-                    frmMain.ShowDialog();
-                }
-                else
-                {
-                    // otherwise, show an error message
-                    MessageBox.Show("Error while connecting to game. Please try again.");
-                }
+                    // check if we actually connected
+                    if (matchClient.IsInMatch)
+                    {
+                        // if we did, open the main window to start playing
+                        frmMain?.Dispose();
+                        frmMain = new MainForm(matchClient);
+                        frmMain.ShowDialog();
+                    }
+                    else
+                    {
+                        // otherwise, show an error message
+                        MessageBox.Show("Error while connecting to game. Please try again.");
+                    }
+                });
             }).Start();
         }
     }

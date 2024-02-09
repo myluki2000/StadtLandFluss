@@ -78,21 +78,21 @@
             tbRiver.Location = new Point(71, 85);
             tbRiver.Name = "tbRiver";
             tbRiver.Size = new Size(204, 23);
-            tbRiver.TabIndex = 4;
+            tbRiver.TabIndex = 3;
             // 
             // tbCountry
             // 
             tbCountry.Location = new Point(71, 56);
             tbCountry.Name = "tbCountry";
             tbCountry.Size = new Size(204, 23);
-            tbCountry.TabIndex = 5;
+            tbCountry.TabIndex = 2;
             // 
             // btnFinish
             // 
             btnFinish.Location = new Point(200, 114);
             btnFinish.Name = "btnFinish";
             btnFinish.Size = new Size(75, 23);
-            btnFinish.TabIndex = 7;
+            btnFinish.TabIndex = 4;
             btnFinish.Text = "Finish!";
             btnFinish.UseVisualStyleBackColor = true;
             btnFinish.Click += btnFinish_Click;
@@ -115,6 +115,7 @@
             lblOutput.ReadOnly = true;
             lblOutput.Size = new Size(346, 432);
             lblOutput.TabIndex = 9;
+            lblOutput.TabStop = false;
             lblOutput.Text = "";
             // 
             // MainForm

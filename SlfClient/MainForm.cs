@@ -19,7 +19,7 @@ namespace SlfClient
             matchClient.OnRoundFinished += MatchClientOnRoundFinished;
             matchClient.OnRoundResults += MatchClientOnRoundResults;
 
-            lblSelectedLetter.Text = "The selected letter this round is: " + matchClient.CurrentLetter ?? "-";
+            lblSelectedLetter.Text = "The selected letter this round is: " + (matchClient.CurrentLetter ?? "-");
         }
 
         private void MatchClientOnRoundFinished(object? sender, EventArgs e)
@@ -29,62 +29,68 @@ namespace SlfClient
 
         private void MatchClientOnRoundStarted(object? sender, EventArgs e)
         {
-            lblSelectedLetter.Text = "The selected letter this round is: " + matchClient.CurrentLetter;
+            Invoke(() =>
+            {
+                lblSelectedLetter.Text = "The selected letter this round is: " + matchClient.CurrentLetter;
 
-            tbCity.Enabled = true;
-            tbCountry.Enabled = true;
-            tbRiver.Enabled = true;
-            btnFinish.Enabled = true;
+                tbCity.Enabled = true;
+                tbCountry.Enabled = true;
+                tbRiver.Enabled = true;
+                btnFinish.Enabled = true;
+            });
         }
 
         private void MatchClientOnRoundResults(object? sender, MatchRound _)
         {
-            lblOutput.Text = "";
-
-            int i = 0;
-            foreach (MatchRound round in matchClient.FinishedRounds)
+            Invoke(() =>
             {
-                i++;
+                lblOutput.Text = "";
 
-                lblOutput.AppendText("----- Round " + i + " -----\n");
-
-                lblOutput.AppendText("Starting Letter: ");
-                lblOutput.AppendText(round.Letter);
-                lblOutput.AppendText("\n\n");
-
-                lblOutput.AppendText("Results:\n");
-
-                foreach (KeyValuePair<Guid, MatchRound.Answers> pair in round.PlayerAnswers)
+                int i = 0;
+                foreach (MatchRound round in matchClient.FinishedRounds)
                 {
-                    lblOutput.AppendText("- ");
-                    lblOutput.AppendText(pair.Key.ToString());
+                    i++;
 
-                    if (pair.Key == matchClient.Identity)
-                        lblOutput.AppendText(" (You!)");
+                    lblOutput.AppendText("----- Round " + i + " -----\n");
 
-                    lblOutput.AppendText(" -\n");
+                    lblOutput.AppendText("Starting Letter: ");
+                    lblOutput.AppendText(round.Letter);
+                    lblOutput.AppendText("\n\n");
 
-                    lblOutput.AppendText("City: ");
-                    lblOutput.SelectionColor = pair.Value.City.Accepted ? Color.Green : Color.Red;
-                    lblOutput.AppendText(pair.Value.City.Text);
-                    lblOutput.AppendText(pair.Value.City.Accepted ? " \u2714\n" : "\u2718\n");
-                    lblOutput.SelectionColor = SystemColors.WindowText;
+                    lblOutput.AppendText("Results:\n");
 
-                    lblOutput.AppendText("Country: ");
-                    lblOutput.SelectionColor = pair.Value.Country.Accepted ? Color.Green : Color.Red;
-                    lblOutput.AppendText(pair.Value.Country.Text);
-                    lblOutput.AppendText(pair.Value.Country.Accepted ? " \u2714\n" : "\u2718\n");
-                    lblOutput.SelectionColor = SystemColors.WindowText;
+                    foreach (KeyValuePair<Guid, MatchRound.Answers> pair in round.PlayerAnswers)
+                    {
+                        lblOutput.AppendText("- ");
+                        lblOutput.AppendText(pair.Key.ToString());
 
-                    lblOutput.AppendText("River: ");
-                    lblOutput.SelectionColor = pair.Value.River.Accepted ? Color.Green : Color.Red;
-                    lblOutput.AppendText(pair.Value.River.Text);
-                    lblOutput.AppendText(pair.Value.River.Accepted ? " \u2714\n" : "\u2718\n");
-                    lblOutput.SelectionColor = SystemColors.WindowText;
+                        if (pair.Key == matchClient.Identity)
+                            lblOutput.AppendText(" (You!)");
 
-                    lblOutput.AppendText("\n");
+                        lblOutput.AppendText(" -\n");
+
+                        lblOutput.AppendText("City: ");
+                        lblOutput.SelectionColor = pair.Value.City.Accepted ? Color.Green : Color.Red;
+                        lblOutput.AppendText(pair.Value.City.Text);
+                        lblOutput.AppendText(pair.Value.City.Accepted ? " \u2714\n" : "\u2718\n");
+                        lblOutput.SelectionColor = SystemColors.WindowText;
+
+                        lblOutput.AppendText("Country: ");
+                        lblOutput.SelectionColor = pair.Value.Country.Accepted ? Color.Green : Color.Red;
+                        lblOutput.AppendText(pair.Value.Country.Text);
+                        lblOutput.AppendText(pair.Value.Country.Accepted ? " \u2714\n" : "\u2718\n");
+                        lblOutput.SelectionColor = SystemColors.WindowText;
+
+                        lblOutput.AppendText("River: ");
+                        lblOutput.SelectionColor = pair.Value.River.Accepted ? Color.Green : Color.Red;
+                        lblOutput.AppendText(pair.Value.River.Text);
+                        lblOutput.AppendText(pair.Value.River.Accepted ? " \u2714\n" : "\u2718\n");
+                        lblOutput.SelectionColor = SystemColors.WindowText;
+
+                        lblOutput.AppendText("\n");
+                    }
                 }
-            }
+            });
         }
 
         private void btnFinish_Click(object sender, EventArgs e)
