@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
@@ -19,11 +21,6 @@ namespace SlfServer
     internal class Server
     {
         public Guid ServerId = Guid.NewGuid();
-
-        /// <summary>
-        /// TcpListener used for Bully election.
-        /// </summary>
-        private readonly TcpListener tcpListener; // TODO: Rest of the fucking owl
 
         /// <summary>
         /// Ordered reliable multicast networking client used for communication between this server and other servers.
@@ -47,6 +44,10 @@ namespace SlfServer
         /// Thread used to handle received message of the matchNetworkingClient.
         /// </summary>
         private Thread matchReceiveThread;
+        /// <summary>
+        /// Thread used by the TCP listener to accept new connections.
+        /// </summary>
+        private Thread tcpListenerThread;
 
         /// <summary>
         /// ID and IP Address of the current leader or null if no leader is decided (or this server doesn't know about it!)
@@ -65,7 +66,7 @@ namespace SlfServer
 
                 _leader = value;
                 if (_leader != null)
-                    Console.WriteLine("Leader set to " + _leader.Value.guid + " with IP " + _leader.Value.ip);
+                    Console.WriteLine("Leader set to " + _leader?.guid + " with IP " + _leader?.ip);
                 else
                     Console.WriteLine("Leader unset.");
             }
@@ -81,7 +82,7 @@ namespace SlfServer
         /// <summary>
         /// Sends regular heartbeats to the multicast group of the match.
         /// </summary>
-        private Timer? matchHeartbeatTimer = null;
+        private readonly Timer? matchHeartbeatTimer = null;
 
         /// <summary>
         /// How many players can partake in a match.
@@ -145,6 +146,9 @@ namespace SlfServer
             receiveThread = new Thread(ReceiveNetworkingMessages);
             receiveThread.Start();
 
+            tcpListenerThread = new Thread(ListenTcp);
+            tcpListenerThread.Start();
+
             // generate a multicast IP for the match run by this server
             IPAddress matchMulticastAddress;
             while (true)
@@ -184,25 +188,115 @@ namespace SlfServer
             Console.WriteLine("Server startup complete! Server running!");
         }
 
+        private void ListenTcp()
+        {
+            TcpListener tcpListener = new(IPAddress.Any, 1337);
+            tcpListener.Start();
+
+            while (true)
+            {
+                TcpClient client = tcpListener.AcceptTcpClient();
+                Console.WriteLine("[TCP] Accepted a TCP client.");
+                ThreadPool.QueueUserWorkItem(TcpClientReceiveMessage, client);
+            }
+        }
+
+        private void TcpClientReceiveMessage(object? obj)
+        {
+            byte[] data = null;
+            IPAddress sender = null;
+            using (TcpClient client = (TcpClient)obj!)
+            {
+
+                sender = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
+
+                using NetworkStream ns = client.GetStream();
+
+                // Read the data into a byte array
+                byte[] buffer = new byte[1024];
+                using MemoryStream ms = new();
+
+                int bytesRead;
+                while ((bytesRead = ns.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    ms.Write(buffer, 0, bytesRead);
+                }
+
+                data = ms.ToArray();
+            }
+
+            SlfPacketBase packet = SlfPacketBase.FromBytes(data.Cast<byte>().GetEnumerator());
+
+            Console.WriteLine("[TCP] Received a packet of type " + packet.GetType().Name);
+
+            if (packet is StartElectionPacket)
+            {
+                // ignore election packets when we have a lower id than the sender
+                if (ServerId < packet.SenderId)
+                    return;
+
+                ElectionResponsePacket electionResponsePacket = new(ServerId);
+                
+                // send a response to the server the start election packet came from
+                using (TcpClient tcpClient = new())
+                {
+                    Console.WriteLine("[TCP] Sending an election response message to " + sender);
+                    tcpClient.Connect(new IPEndPoint(sender, 1337));
+                    using NetworkStream ns = tcpClient.GetStream();
+
+                    ns.Write(electionResponsePacket.ToBytes());
+                    ns.Flush();
+                }
+
+                Console.WriteLine("Starting leader election because we received a StartElectionPacket...");
+                StartElection();
+                State = ServerState.ELECTION_STARTED;
+            }
+            else if (packet is ElectionResponsePacket)
+            {
+                Console.WriteLine("Received an election response packet, so I don't need to do anything further!");
+                // set leader value (this isn't the final leader, but we are done here and have found a server with a higher id than us)
+                Leader = (packet.SenderId, sender);
+            }
+        }
+
         public async void StartElection()
         {
             // the king is dead
             Leader = null;
 
+            heartbeatTimer?.Stop();
             heartbeatTimer?.Dispose();
 
             StartElectionPacket startElectionPacket = new(ServerId);
 
             State = ServerState.ELECTION_STARTED;
 
-            // TODO: Change election messages to TCP
             // send start election packets to servers with higher ID than ourselves and wait for a response
             foreach ((Guid id, IPAddress ipAddress) knownServer in knownServers)
             {
-                if (knownServer.id > ServerId)
+                // only send election messages to servers with an ID greater than our own
+                if (knownServer.id <= ServerId) continue;
+
+                new Thread(() =>
                 {
-                    networkingClient.SendOneOff(startElectionPacket, knownServer.ipAddress);
-                }
+                    try
+                    {
+                        Console.WriteLine("[TCP] Sending a start election message to " + knownServer.ipAddress);
+                        using TcpClient tcpClient = new();
+
+                        tcpClient.Connect(new IPEndPoint(knownServer.ipAddress, 1337));
+                        using NetworkStream ns = tcpClient.GetStream();
+
+                        ns.Write(startElectionPacket.ToBytes());
+
+                        ns.Flush();
+                    }
+                    catch (SocketException ex)
+                    {
+                        Console.WriteLine("SocketException while trying to reach other server during leader election. The server is probably offline...");
+                    }
+                }).Start();
             }
 
             await Task.Delay(1000);
@@ -256,59 +350,8 @@ namespace SlfServer
                     knownServers.Add((packet.SenderId, sender));
                 }
 
-                if (packet is StartElectionPacket)
-                {
-                    // ignore election packets when we have a lower id than the sender
-                    if (ServerId < packet.SenderId)
-                        continue;
 
-                    ElectionResponsePacket electionResponsePacket = new(ServerId);
-                    // send a response to the server the start election packet came from
-                    // TODO: Change to TCP
-                    networkingClient.SendOneOff(electionResponsePacket, sender);
-
-                    Console.WriteLine("Starting leader election because we received a StartElectionPacket...");
-                    StartElection();
-                    State = ServerState.ELECTION_STARTED;
-                }
-                else if (packet is ElectionResponsePacket)
-                {
-                    Console.WriteLine("Received an election response packet, so I don't need to do anything further!");
-                    // set leader value (this isn't the final leader, but we are done here and have found a server with a higher id than us)
-                    Leader = (packet.SenderId, sender);
-                }
-                else if (packet is LeaderAnnouncementPacket)
-                {
-                    // start a new election if we have a higher id than the announced leader (something has gone wrong!)
-                    if (packet.SenderId < ServerId)
-                    {
-                        Console.WriteLine("Starting leader election because the leader that just announced itself has a lower ID than me!");
-                        StartElection();
-                        continue;
-                    }
-
-                    // long live the king
-                    Leader = (packet.SenderId, sender);
-
-                    heartbeatTimer?.Dispose();
-                    // start the timer which checks for regular heartbeats of the leader
-                    heartbeatTimer = new Timer(2000)
-                    {
-                        AutoReset = true
-                    };
-
-                    heartbeatTimer.Elapsed += (sender, args) =>
-                    {
-                        Console.WriteLine("Heartbeat timeout elapsed without a heartbeat message from the leader!");
-                        ((Timer)sender).Stop();
-                        Console.WriteLine("Starting leader election because of missing leader heartbeat...");
-                        StartElection();
-                    };
-
-                    heartbeatTimer.Start();
-
-                }
-                else if (packet is HeartbeatPacket)
+                if (packet is HeartbeatPacket)
                 {
                     if (!Leader.HasValue || packet.SenderId != Leader.Value.guid || heartbeatTimer == null)
                     {
@@ -335,7 +378,7 @@ namespace SlfServer
                 else if (packet is HeartbeatResponsePacket heartbeatResponsePacket)
                 {
                     // update this server's (the server the heartbeat response came from) status in the serverStatuses dictionary
-                    serverStatuses[heartbeatResponsePacket.SenderId] = (sender, heartbeatResponsePacket, getCurrentTimeMillis());
+                    serverStatuses[heartbeatResponsePacket.SenderId] = (sender, heartbeatResponsePacket, GetCurrentTimeMillis());
                 }
                 else if (packet is RequestMatchAssignmentPacket requestMatchAssignmentPacket)
                 {
@@ -354,7 +397,7 @@ namespace SlfServer
                     // that is the case (This can happen e.g. if the player crashes during the match and they restart their client
                     // and want to continue playing that same match)
                     (Guid id, IPAddress ip) matchServer = serverStatuses
-                        .Where(x => (getCurrentTimeMillis() - x.Value.lastTimestamp) < 2000) // skip server if we haven't received a heartbeat for >2sec
+                        .Where(x => (GetCurrentTimeMillis() - x.Value.lastTimestamp) < 2000) // skip server if we haven't received a heartbeat for >2sec
                         .Where(x => x.Value.status.CurrentPlayers.Contains(playerId))
                         .Select(x => (x.Key, x.Value.ipAddress))
                         .FirstOrDefault();
@@ -373,7 +416,7 @@ namespace SlfServer
                     {
                         Console.WriteLine("[Match Assignment] Could not find any matches the player is already part of. Finding a server with free slots...");
                         matchServer = serverStatuses
-                            .Where(x => (getCurrentTimeMillis() - x.Value.lastTimestamp) < 2000) // skip server if we haven't received a heartbeat for >2sec
+                            .Where(x => (GetCurrentTimeMillis() - x.Value.lastTimestamp) < 2000) // skip server if we haven't received a heartbeat for >2sec
                             .Where(x => x.Value.status.CurrentPlayers.Length < x.Value.status.MaxPlayerCount)
                             .Select(x => (x.Key, x.Value.ipAddress))
                             .FirstOrDefault();
@@ -400,6 +443,37 @@ namespace SlfServer
                     // send response to the client requesting a match assignment
                     MatchAssignmentPacket responsePacket = new(ServerId, true, "success", matchServer.id, matchServer.ip.ToString());
                     networkingClient.SendOneOff(responsePacket, sender);
+                }
+                else if (packet is LeaderAnnouncementPacket)
+                {
+                    // start a new election if we have a higher id than the announced leader (something has gone wrong!)
+                    if (packet.SenderId < ServerId)
+                    {
+                        Console.WriteLine("Starting leader election because the leader that just announced itself has a lower ID than me!");
+                        StartElection();
+                        return;
+                    }
+
+                    // long live the king
+                    Leader = (packet.SenderId, sender);
+
+                    heartbeatTimer?.Dispose();
+                    // start the timer which checks for regular heartbeats of the leader
+                    heartbeatTimer = new Timer(2000)
+                    {
+                        AutoReset = true
+                    };
+
+                    heartbeatTimer.Elapsed += (sender, args) =>
+                    {
+                        Console.WriteLine("Heartbeat timeout elapsed without a heartbeat message from the leader!");
+                        ((Timer)sender).Stop();
+                        Console.WriteLine("Starting leader election because of missing leader heartbeat...");
+                        StartElection();
+                    };
+
+                    heartbeatTimer.Start();
+
                 }
             }
         }
@@ -492,7 +566,7 @@ namespace SlfServer
                         throw new Exception("CurrentRound is null even though we are receiving player answer packets!");
 
                     // ignore this packet if it is not related to the match running on this server
-                    if(submitWordsPacket.MatchId != matchId)
+                    if (submitWordsPacket.MatchId != matchId)
                         continue;
 
                     // ignore this type of packet if the server isn't currently waiting for player answers (i.e. the round has
@@ -580,7 +654,7 @@ namespace SlfServer
             RUNNING
         }
 
-        private static long getCurrentTimeMillis()
+        private static long GetCurrentTimeMillis()
         {
             DateTime epochStart = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             long currentTimeMillis = (long)(DateTime.UtcNow - epochStart).TotalMilliseconds;

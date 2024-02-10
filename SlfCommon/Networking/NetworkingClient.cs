@@ -299,8 +299,8 @@ namespace SlfCommon.Networking
         {
             SlfPacketBase packet = SlfPacketBase.FromBytes(data);
 
-            Console.WriteLine("Received data over UDP (unreliable one-off, sender=" + packet.SenderId
-                + ", packet type=" + packet.GetType().Name + ").");
+            Console.WriteLine("Received data over UDP (unreliable one-off, sender=" + packet.SenderId + "(" +  remoteEndpoint.Address
+                + "), packet type=" + packet.GetType().Name + ").");
 
             // add packet to the delivery queue with a dummy frame
             deliveryQueue.Add((remoteEndpoint.Address, new PacketFrame(false, null, -1, Guid.Empty, Array.Empty<PacketFrame.Acknowledgement>(), packet)));
@@ -327,20 +327,29 @@ namespace SlfCommon.Networking
 
             foreach (PacketFrame.Acknowledgement acknowledgement in frame.PiggybackAcknowledgements)
             {
-                // skip this acknowledgement, if it is about us. We can't miss a packet we sent ourselves
+                
                 if (acknowledgement.RemoteEndpointId == Identity)
-                    continue;
-
-                if (!remoteSequenceNumbers.ContainsKey((acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)))
                 {
-                    // we haven't received any packet from this endpoint yet, so treat it as if it was seq number 0
-                    SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId, acknowledgement.SequenceNumber, 0);
+                    // if this acknowledgement is about ourselves, use our own sequence number as reference
+                    if (acknowledgement.SequenceNumber > sequenceNumber)
+                    {
+                        SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId, acknowledgement.SequenceNumber, sequenceNumber);
+                    }
                 }
-                else if (acknowledgement.SequenceNumber > remoteSequenceNumbers[(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)])
+                else
                 {
-                    // we have missed a packet from this endpoint
-                    SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId,
-                        acknowledgement.SequenceNumber, remoteSequenceNumbers[(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)]);
+                    // otherwise retrieve the sequence number we have stored for the specified remote host
+                    if (!remoteSequenceNumbers.ContainsKey((acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)))
+                    {
+                        // we haven't received any packet from this endpoint yet, so treat it as if it was seq number 0
+                        SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId, acknowledgement.SequenceNumber, 0);
+                    }
+                    else if (acknowledgement.SequenceNumber > remoteSequenceNumbers[(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)])
+                    {
+                        // we have missed a packet from this endpoint
+                        SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId,
+                            acknowledgement.SequenceNumber, remoteSequenceNumbers[(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)]);
+                    }
                 }
             }
 

@@ -102,13 +102,17 @@ namespace SlfClient
         private void SubmitWords()
         {
             matchClient.SubmitWords(tbCity.Text, tbCountry.Text, tbRiver.Text);
-            tbCity.Text = "";
-            tbCity.Enabled = false;
-            tbCountry.Text = "";
-            tbCountry.Enabled = false;
-            tbRiver.Text = "";
-            tbRiver.Enabled = false;
-            btnFinish.Enabled = false;
+
+            Invoke(() =>
+            {
+                tbCity.Text = "";
+                tbCity.Enabled = false;
+                tbCountry.Text = "";
+                tbCountry.Enabled = false;
+                tbRiver.Text = "";
+                tbRiver.Enabled = false;
+                btnFinish.Enabled = false;
+            });
         }
     }
 }

@@ -152,7 +152,7 @@ namespace SlfClient
             {
                 (IPAddress sender, SlfPacketBase packet) = networkingClient.Receive();
 
-                Console.WriteLine("Received something");
+                Console.WriteLine("[MatchClient] Processing a packet of type " + packet.GetType().Name);
 
                 if (packet is MatchAssignmentPacket matchAssignmentPacket)
                 {

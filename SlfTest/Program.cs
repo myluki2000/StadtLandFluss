@@ -7,8 +7,13 @@ namespace SlfTest
 {
     internal class Program
     {
-        private static readonly NetworkingClient networkingClient = new(IPAddress.Parse("239.0.0.1"));
+        private static readonly NetworkingClient networkingClient;
         private static readonly Guid identity = Guid.NewGuid();
+
+        static Program()
+        {
+            networkingClient = new NetworkingClient(identity, IPAddress.Parse("239.0.0.1"));
+        }
 
         static void Main(string[] args)
         {
@@ -56,7 +61,7 @@ namespace SlfTest
             while (string.IsNullOrEmpty(river))
                 river = Console.ReadLine();
 
-            SubmitWordsPacket packet = new(identity, city, country, river);
+            SubmitWordsPacket packet = new(identity, Guid.NewGuid(), city, country, river);
 
             Console.WriteLine("Drop packet on purpose? [y/n]");
             Console.Write("> ");
