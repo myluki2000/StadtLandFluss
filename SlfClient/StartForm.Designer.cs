@@ -30,6 +30,8 @@
         {
             label1 = new Label();
             btnJoinGame = new Button();
+            lblPlayerId = new Label();
+            lblLoading = new Label();
             SuspendLayout();
             // 
             // label1
@@ -47,28 +49,53 @@
             // 
             btnJoinGame.Location = new Point(12, 134);
             btnJoinGame.Name = "btnJoinGame";
-            btnJoinGame.Size = new Size(285, 41);
+            btnJoinGame.Size = new Size(285, 39);
             btnJoinGame.TabIndex = 1;
             btnJoinGame.Text = "Join Game";
             btnJoinGame.UseVisualStyleBackColor = true;
             btnJoinGame.Click += btnJoinGame_Click;
             // 
+            // lblPlayerId
+            // 
+            lblPlayerId.AutoSize = true;
+            lblPlayerId.Location = new Point(12, 176);
+            lblPlayerId.Name = "lblPlayerId";
+            lblPlayerId.Size = new Size(38, 15);
+            lblPlayerId.TabIndex = 2;
+            lblPlayerId.Text = "label2";
+            // 
+            // lblLoading
+            // 
+            lblLoading.Dock = DockStyle.Fill;
+            lblLoading.Location = new Point(0, 107);
+            lblLoading.Name = "lblLoading";
+            lblLoading.Size = new Size(309, 93);
+            lblLoading.TabIndex = 3;
+            lblLoading.Text = "label2";
+            lblLoading.TextAlign = ContentAlignment.MiddleCenter;
+            lblLoading.Visible = false;
+            // 
             // StartForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(309, 187);
+            ClientSize = new Size(309, 200);
+            Controls.Add(lblLoading);
+            Controls.Add(lblPlayerId);
             Controls.Add(btnJoinGame);
             Controls.Add(label1);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             Name = "StartForm";
             Text = "StartForm";
             ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion
 
         private Label label1;
         private Button btnJoinGame;
+        private Label lblPlayerId;
+        private Label lblLoading;
     }
 }

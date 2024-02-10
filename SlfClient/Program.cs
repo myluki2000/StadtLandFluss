@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace SlfClient
 {
     internal static class Program
@@ -8,10 +10,10 @@ namespace SlfClient
         [STAThread]
         static void Main()
         {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
+            Config config = new("./config.txt");
+
             ApplicationConfiguration.Initialize();
-            Application.Run(new MainForm());
+            Application.Run(new StartForm(config));
         }
     }
 }

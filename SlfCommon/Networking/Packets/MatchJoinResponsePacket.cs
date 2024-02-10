@@ -24,6 +24,7 @@ namespace SlfCommon.Networking.Packets
         {
             MatchMulticastIp = "";
             MatchId = Guid.Empty;
+            Accepted = accepted;
 
             if (accepted)
             {
