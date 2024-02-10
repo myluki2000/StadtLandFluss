@@ -2,7 +2,7 @@
 
 ## Server
 
-The server requires 3 extra files in its executable directorya (the same directory the SlfServer.exe file lies in):
+The server requires 3 extra files in its executable directory (the same directory the SlfServer.exe file lies in):
 
 * stadt.txt
 * land.txt
