@@ -37,7 +37,7 @@ namespace SlfClient
         /// <summary>
         /// Event which is raised when the game server signals that the match has ended.
         /// </summary>
-        public event EventHandler? OnMatchEnd;
+        public event EventHandler<string>? OnMatchEnd;
         /// <summary>
         /// Event which is raised when connection to the server is lost (i.e. heartbeat packets do not arrive for a while).
         /// </summary>
@@ -86,6 +86,11 @@ namespace SlfClient
         /// ID of the match we are playing in. NULL if we are not currently partaking in a match.
         /// </summary>
         public Guid? MatchId = null;
+
+        /// <summary>
+        /// What round we are currently playing in. Starts at 1.
+        /// </summary>
+        private int currentRoundNumber = 0;
 
         /// <summary>
         /// True if the client is connected to a match, false otherwise.
@@ -152,6 +157,10 @@ namespace SlfClient
             {
                 (IPAddress sender, SlfPacketBase packet) = networkingClient.Receive();
 
+                // do not process our own packets
+                if(packet.SenderId == Identity)
+                    continue;
+
                 Console.WriteLine("[MatchClient] Processing a packet of type " + packet.GetType().Name);
 
                 if (packet is MatchAssignmentPacket matchAssignmentPacket)
@@ -206,6 +215,13 @@ namespace SlfClient
                     if (roundStartPacket.MatchId != MatchId)
                         continue;
 
+                    // ignore this packet if it is of a lower round than the one we know of or if it is a retransmission
+                    // of the round start packet of the current round
+                    if (currentRoundNumber >= roundStartPacket.RoundNumber)
+                        continue;
+
+                    currentRoundNumber = roundStartPacket.RoundNumber;
+
                     CurrentLetter = roundStartPacket.Letter;
                     OnRoundStarted?.Invoke(this, EventArgs.Empty);
                 }
@@ -215,6 +231,16 @@ namespace SlfClient
                     if (roundFinishPacket.MatchId != MatchId)
                         continue;
 
+                    // ignore this packet if it is about a previous round
+                    if (currentRoundNumber > roundFinishPacket.RoundNumber)
+                        continue;
+
+                    // set our current round number to the round number of the finish packet, evidently the match is
+                    // further along than we thought
+                    if (currentRoundNumber < roundFinishPacket.RoundNumber)
+                        currentRoundNumber = roundFinishPacket.RoundNumber;
+
+                    // setting currentLetter to NULL indicates that no round is currently running
                     CurrentLetter = null;
                     OnRoundFinished?.Invoke(this, EventArgs.Empty);
                 }
@@ -265,7 +291,7 @@ namespace SlfClient
 
                     heartbeatTimer.Stop();
 
-                    OnMatchEnd?.Invoke(this, EventArgs.Empty);
+                    OnMatchEnd?.Invoke(this, matchEndPacket.MatchResultInformation);
                 }
                 else
                 {
@@ -292,7 +318,7 @@ namespace SlfClient
                     "Tried to finish a round even though MatchClient doesn't have a MatchID (are we even part of a match?)");
             
 
-            RoundFinishPacket packet = new(Identity, MatchId.Value);
+            RoundFinishPacket packet = new(Identity, MatchId.Value, currentRoundNumber);
             networkingClient.SendOrderedReliableToGroup(packet);
         }
 

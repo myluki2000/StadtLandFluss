@@ -32,9 +32,9 @@ namespace SlfClient
             lblPlayerId.Text = "Player ID: " + config.PlayerId;
         }
 
-        private void MatchClientOnMatchEnd(object? sender, EventArgs e)
+        private void MatchClientOnMatchEnd(object? sender, string matchInformation)
         {
-            Invoke(() => EndMatch());
+            Invoke(() => EndMatch(matchInformation));
         }
 
         private void MatchClientOnServerConnectionLost(object? sender, EventArgs e)
@@ -47,7 +47,7 @@ namespace SlfClient
         /// the client back into a state where it can connect to a new match. Optionally, a reason for the match ending can
         /// be provided which will be displayed to the user.
         /// </summary>
-        private void EndMatch(string? reason = null)
+        private void EndMatch(string? additionalInformation = null)
         {
             frmMain?.Close();
             frmMain?.Dispose();
@@ -55,102 +55,13 @@ namespace SlfClient
 
             StringBuilder sb = new();
 
-            if (reason == null)
+            
+            sb.Append("The match has ended.");
+            
+            if(additionalInformation != null)
             {
-                sb.Append("The match has ended.");
-            }
-            else
-            {
-                sb.Append("The match has ended for the following reason: ");
-                sb.Append(reason);
-            }
-
-            sb.AppendLine("Final scores:");
-
-            // score calculation as described in the game rules in our report
-            Dictionary<Guid, int> playerScores = new();
-            foreach (MatchRound round in matchClient.FinishedRounds)
-            {
-                foreach ((Guid playerId, MatchRound.Answers playerAnswers) in round.PlayerAnswers)
-                {
-                    int cityScore = 0;
-
-                    // if answer wasn't accepted, we don't get any points for it
-                    if (playerAnswers.City.Accepted)
-                    {
-                        cityScore = 5;
-
-                        // if no one else has the same word, we get 10 points for it
-                        if (round.PlayerAnswers
-                            .Where(x => x.Key != playerId)
-                            .All(x => x.Value.City.Text != playerAnswers.City.Text))
-                            cityScore = 10;
-
-                        // if no one else has any solution in this category, we get 20 points for it
-                        if (round.PlayerAnswers
-                            .Where(x => x.Key != playerId)
-                            .All(x => string.IsNullOrEmpty(x.Value.City.Text)))
-                            cityScore = 20;
-                    }
-
-                    int countryScore = 0;
-
-                    // if answer wasn't accepted, we don't get any points for it
-                    if (playerAnswers.Country.Accepted)
-                    {
-                        countryScore = 5;
-
-                        // if no one else has the same word, we get 10 points for it
-                        if (round.PlayerAnswers
-                            .Where(x => x.Key != playerId)
-                            .All(x => x.Value.Country.Text != playerAnswers.Country.Text))
-                            countryScore = 10;
-
-                        // if no one else has any solution in this category, we get 20 points for it
-                        if (round.PlayerAnswers
-                            .Where(x => x.Key != playerId)
-                            .All(x => string.IsNullOrEmpty(x.Value.Country.Text)))
-                            countryScore = 20;
-                    }
-
-                    int riverScore = 0;
-
-                    // if answer wasn't accepted, we don't get any points for it
-                    if (playerAnswers.River.Accepted)
-                    {
-                        riverScore = 5;
-
-                        // if no one else has the same word, we get 10 points for it
-                        if (round.PlayerAnswers
-                            .Where(x => x.Key != playerId)
-                            .All(x => x.Value.River.Text != playerAnswers.River.Text))
-                            riverScore = 10;
-
-                        // if no one else has any solution in this category, we get 20 points for it
-                        if (round.PlayerAnswers
-                            .Where(x => x.Key != playerId)
-                            .All(x => string.IsNullOrEmpty(x.Value.River.Text)))
-                            riverScore = 20;
-                    }
-
-                    // if player not yet in dictionary, initialize with 0
-                    playerScores.TryAdd(playerId, 0);
-
-                    // add scores from this round to player's total score
-                    playerScores[playerId] += cityScore + countryScore + riverScore;
-                }
-            }
-
-            // generate the printout displayed after the match
-            foreach ((Guid playerId, int score) in playerScores)
-            {
-                sb.Append("\n");
-                sb.Append(playerId);
-                if (playerId == matchClient.Identity)
-                    sb.Append(" (You!)");
-                sb.Append(": ");
-                sb.Append(score);
-                sb.Append(" Points");
+                sb.Append(" Additional information:\n");
+                sb.Append(additionalInformation);
             }
 
             // clean-up before we dispose of the match client

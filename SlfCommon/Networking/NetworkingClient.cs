@@ -360,6 +360,8 @@ namespace SlfCommon.Networking
         {
             PacketFrame frame = PacketFrame.FromBytes(data);
 
+            bool myOwnPacket = frame.SenderId == Identity;
+
             IPAddress originalSenderAddress = remoteEndpoint.Address;
 
             // if the frame was retransmitted by a group participant who is not the original sender of the packet, then we 
@@ -367,17 +369,31 @@ namespace SlfCommon.Networking
             if (frame.IsRetransmitByOtherSender)
                 originalSenderAddress = frame.OriginalSenderIp!;
 
-            receivedPackets.Add(frame);
+            // in case we receive our own packet (which we lost after a crash) by the means of a NACK retransmit, we add it to our sent
+            // packets again as if nothing happened
+            if(frame.SenderId == Identity)
+                sentPackets.TryAdd(frame.SequenceNumber, frame.Payload!);
+            else if(!receivedPackets.Any(x => x.SenderId == frame.SenderId && x.SequenceNumber == frame.SequenceNumber))
+                receivedPackets.Add(frame);
 
             Console.WriteLine("Received data over UDP (ordered reliable frame, sender=" + frame.SenderId
                 + ", seq no=" + frame.SequenceNumber
                 + ", packet type=" + (frame.Payload?.GetType().Name ?? "null") + ").");
 
-            // if we don't have any sequence number for this remote endpoint yet, assume we have sequence number 0 stored
-            if (!remoteSequenceNumbers.TryGetValue((originalSenderAddress, frame.SenderId), out int storedSequenceNumber))
+            int storedSequenceNumber = 0;
+
+            if (myOwnPacket)
             {
-                storedSequenceNumber = 0;
-                remoteSequenceNumbers[(originalSenderAddress, frame.SenderId)] = 0;
+                storedSequenceNumber = sequenceNumber;
+            }
+            else
+            {
+                // if we don't have any sequence number for this remote endpoint yet, assume we have sequence number 0 stored
+                if (!remoteSequenceNumbers.TryGetValue((originalSenderAddress, frame.SenderId), out storedSequenceNumber))
+                {
+                    storedSequenceNumber = 0;
+                    remoteSequenceNumbers[(originalSenderAddress, frame.SenderId)] = 0;
+                }
             }
 
             if (frame.SequenceNumber == storedSequenceNumber + 1)
@@ -385,7 +401,11 @@ namespace SlfCommon.Networking
                 // if sequence number is exactly the next number after the packet we have last delivered from this source, we
                 // can deliver this packet too
                 deliveryQueue.Add((originalSenderAddress, frame));
-                remoteSequenceNumbers[(originalSenderAddress, frame.SenderId)]++;
+
+                if (myOwnPacket)
+                    sequenceNumber++;
+                else
+                    remoteSequenceNumbers[(originalSenderAddress, frame.SenderId)]++;
             }
             else if (frame.SequenceNumber > storedSequenceNumber + 1)
             {
@@ -399,22 +419,37 @@ namespace SlfCommon.Networking
             }
             // else drop the packet, we already have it
 
+            // handle piggyback acknowledgements
             foreach (PacketFrame.Acknowledgement acknowledgement in frame.PiggybackAcknowledgements)
             {
-                // skip this acknowledgement, if it is about us. We can't miss a packet we sent ourselves
-                if(acknowledgement.RemoteEndpointId == Identity)
-                    continue;
-
-                if (!remoteSequenceNumbers.ContainsKey((acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)))
+                if (acknowledgement.RemoteEndpointId == Identity)
                 {
-                    // we haven't received any packet from this endpoint yet, so treat it as if it was seq number 0
-                    SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId, acknowledgement.SequenceNumber, 0);
+                    // if this acknowledgement is about ourselves, use our own sequence number as reference
+                    if (acknowledgement.SequenceNumber > sequenceNumber)
+                    {
+                        SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId, acknowledgement.SequenceNumber, sequenceNumber);
+                    }
                 }
-                else if (acknowledgement.SequenceNumber > remoteSequenceNumbers[(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)])
+                else
                 {
-                    // we have missed a packet from this endpoint
-                    SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId, 
-                        acknowledgement.SequenceNumber, remoteSequenceNumbers[(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)]);
+                    // otherwise use the sequence number of the remote endpoint we have stored
+                    if (!remoteSequenceNumbers.ContainsKey((acknowledgement.RemoteEndpointIp,
+                            acknowledgement.RemoteEndpointId)))
+                    {
+                        // we haven't received any packet from this endpoint yet, so treat it as if it was seq number 0
+                        SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId,
+                            acknowledgement.SequenceNumber, 0);
+                    }
+                    else if (acknowledgement.SequenceNumber >
+                             remoteSequenceNumbers
+                                 [(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)])
+                    {
+                        // we have missed a packet from this endpoint
+                        SendNegativeAck(acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId,
+                            acknowledgement.SequenceNumber,
+                            remoteSequenceNumbers[
+                                (acknowledgement.RemoteEndpointIp, acknowledgement.RemoteEndpointId)]);
+                    }
                 }
             }
 
@@ -427,15 +462,26 @@ namespace SlfCommon.Networking
 
                 foreach ((IPAddress senderIp, PacketFrame frame) heldbackFrame in holdbackList)
                 {
-                    if (heldbackFrame.frame.SequenceNumber == remoteSequenceNumbers[(heldbackFrame.senderIp, heldbackFrame.frame.SenderId)] + 1)
+                    myOwnPacket = frame.SenderId == Identity;
+
+                    int expectedSequenceNumber = (myOwnPacket
+                        ? sequenceNumber
+                        : remoteSequenceNumbers[(heldbackFrame.senderIp, heldbackFrame.frame.SenderId)]) + 1;
+
+                    if (heldbackFrame.frame.SequenceNumber == expectedSequenceNumber)
                     {
                         deliveryQueue.Add(heldbackFrame);
                         holdbackList.Remove(heldbackFrame);
-                        remoteSequenceNumbers[(heldbackFrame.senderIp, heldbackFrame.frame.SenderId)]++;
+
+                        if (myOwnPacket)
+                            sequenceNumber++;
+                        else
+                            remoteSequenceNumbers[(heldbackFrame.senderIp, heldbackFrame.frame.SenderId)]++;
+
                         anotherPacketDelivered = true;
                         break;
                     } 
-                    else if (heldbackFrame.frame.SequenceNumber < remoteSequenceNumbers[(heldbackFrame.senderIp, heldbackFrame.frame.SenderId)] + 1)
+                    else if (heldbackFrame.frame.SequenceNumber < expectedSequenceNumber)
                     {
                         // if, for some reason, a message in the holdback list has a sequence number smaller than the sequence number of the last message we
                         // delivered, we can discard it

@@ -96,6 +96,10 @@ namespace SlfServer
         private readonly HashSet<Guid> players = new();
 
         /// <summary>
+        /// List containing the rounds that have been played. currentRound is added to this list after it is finished.
+        /// </summary>
+        private readonly List<MatchRound> finishedRounds = new();
+        /// <summary>
         /// Stores information about the current round.
         /// </summary>
         private MatchRound? currentRound = null;
@@ -612,13 +616,104 @@ namespace SlfServer
             if (matchId == null)
                 throw new Exception("Tried to end match when no match is running!");
 
-            MatchEndPacket packet = new(ServerId, matchId.Value);
+            // add last round to finishedRounds list
+            if (currentRound != null)
+                finishedRounds.Add(currentRound);
+
+            // score calculation as described in the game rules in our report
+            Dictionary<Guid, int> playerScores = new();
+            foreach (MatchRound round in finishedRounds)
+            {
+                foreach ((Guid playerId, MatchRound.Answers playerAnswers) in round.PlayerAnswers)
+                {
+                    int cityScore = 0;
+
+                    // if answer wasn't accepted, we don't get any points for it
+                    if (playerAnswers.City.Accepted)
+                    {
+                        cityScore = 5;
+
+                        // if no one else has the same word, we get 10 points for it
+                        if (round.PlayerAnswers
+                            .Where(x => x.Key != playerId)
+                            .All(x => x.Value.City.Text != playerAnswers.City.Text))
+                            cityScore = 10;
+
+                        // if no one else has any solution in this category, we get 20 points for it
+                        if (round.PlayerAnswers
+                            .Where(x => x.Key != playerId)
+                            .All(x => string.IsNullOrEmpty(x.Value.City.Text)))
+                            cityScore = 20;
+                    }
+
+                    int countryScore = 0;
+
+                    // if answer wasn't accepted, we don't get any points for it
+                    if (playerAnswers.Country.Accepted)
+                    {
+                        countryScore = 5;
+
+                        // if no one else has the same word, we get 10 points for it
+                        if (round.PlayerAnswers
+                            .Where(x => x.Key != playerId)
+                            .All(x => x.Value.Country.Text != playerAnswers.Country.Text))
+                            countryScore = 10;
+
+                        // if no one else has any solution in this category, we get 20 points for it
+                        if (round.PlayerAnswers
+                            .Where(x => x.Key != playerId)
+                            .All(x => string.IsNullOrEmpty(x.Value.Country.Text)))
+                            countryScore = 20;
+                    }
+
+                    int riverScore = 0;
+
+                    // if answer wasn't accepted, we don't get any points for it
+                    if (playerAnswers.River.Accepted)
+                    {
+                        riverScore = 5;
+
+                        // if no one else has the same word, we get 10 points for it
+                        if (round.PlayerAnswers
+                            .Where(x => x.Key != playerId)
+                            .All(x => x.Value.River.Text != playerAnswers.River.Text))
+                            riverScore = 10;
+
+                        // if no one else has any solution in this category, we get 20 points for it
+                        if (round.PlayerAnswers
+                            .Where(x => x.Key != playerId)
+                            .All(x => string.IsNullOrEmpty(x.Value.River.Text)))
+                            riverScore = 20;
+                    }
+
+                    // if player not yet in dictionary, initialize with 0
+                    playerScores.TryAdd(playerId, 0);
+
+                    // add scores from this round to player's total score
+                    playerScores[playerId] += cityScore + countryScore + riverScore;
+                }
+            }
+
+            // generate the printout displayed after the match
+            StringBuilder sb = new();
+            foreach ((Guid playerId, int score) in playerScores)
+            {
+                sb.Append("\n");
+                sb.Append(playerId);
+                sb.Append(": ");
+                sb.Append(score);
+                sb.Append(" Points");
+            }
+
+            MatchEndPacket packet = new(ServerId, matchId.Value, sb.ToString());
 
             // delete/reset all our match-specific data
             matchId = null;
             roundsPlayed = 0;
             currentlyWaitingForPlayerAnswers = false;
             players.Clear();
+            finishedRounds.Clear();
+            currentRound = null;
 
             // send match end packet to notify players that the match has ended
             matchNetworkingClient.SendOrderedReliableToGroup(packet);
@@ -630,6 +725,10 @@ namespace SlfServer
         {
             const string allowedLetters = "abcdefghijklmnopqrstuvwxyz";
 
+            // add last round to finishedRounds list
+            if(currentRound != null)
+                finishedRounds.Add(currentRound);
+
             currentRound = new MatchRound(allowedLetters[rand.Next(0, allowedLetters.Length)].ToString());
             currentlyWaitingForPlayerAnswers = false;
 
@@ -638,7 +737,7 @@ namespace SlfServer
                     "MatchID is null even though we want to start a round! This should never happen!");
 
             // send round start packet
-            RoundStartPacket packet = new(ServerId, matchId.Value, currentRound.Letter);
+            RoundStartPacket packet = new(ServerId, matchId.Value, currentRound.Letter, finishedRounds.Count + 1);
             matchNetworkingClient.SendOrderedReliableToGroup(packet);
 
             roundsPlayed++;

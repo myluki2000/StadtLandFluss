@@ -18,9 +18,15 @@ namespace SlfCommon.Networking.Packets
         /// </summary>
         public readonly Guid MatchId;
 
-        public MatchEndPacket(Guid senderId, Guid matchId) : base(senderId)
+        /// <summary>
+        /// String which contains a human-readable text about the match results (i.e. players' scores).
+        /// </summary>
+        public string MatchResultInformation;
+
+        public MatchEndPacket(Guid senderId, Guid matchId, string matchResultInformation) : base(senderId)
         {
             MatchId = matchId;
+            MatchResultInformation = matchResultInformation;
         }
 
         /// <summary>

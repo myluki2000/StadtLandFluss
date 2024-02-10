@@ -18,15 +18,20 @@ namespace SlfCommon.Networking.Packets
         /// ID of the match this packet is related to.
         /// </summary>
         public Guid MatchId;
+        /// <summary>
+        /// Which round this packet references. Starts at 1.
+        /// </summary>
+        public int RoundNumber;
 
         /// <summary>
         /// Empty constructor used by reflection.
         /// </summary>
         public RoundFinishPacket() {}
 
-        public RoundFinishPacket(Guid senderId, Guid matchId) : base(senderId)
+        public RoundFinishPacket(Guid senderId, Guid matchId, int roundNumber) : base(senderId)
         {
             MatchId = matchId;
+            RoundNumber = roundNumber;
         }
 
         public override byte GetPacketTypeId()
