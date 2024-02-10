@@ -38,8 +38,6 @@ namespace SlfServer
                 if (_leader != value)
                 {
                     serverStatuses.Clear();
-                    serverTimers.Clear();
-
                 }
 
                 _leader = value;
@@ -79,7 +77,6 @@ namespace SlfServer
         /// received from each server.
         /// </summary>
         private readonly Dictionary<Guid, (IPAddress ipAddress, HeartbeatResponsePacket status)> serverStatuses = new();
-        private readonly Dictionary<Guid, Timer?> serverTimers = new();
 
         public Server()
         {
@@ -251,28 +248,7 @@ namespace SlfServer
                 else if (packet is HeartbeatResponsePacket heartbeatResponsePacket)
                 {
                     // update this server's (the server the heartbeat response came from) status in the serverStatuses dictionary
-                    // and reset the timer for this server, or create a new timer if it doesn't exist yet
-                    // in case of a timeout, the server will be removed from the dictionary
                     serverStatuses[heartbeatResponsePacket.SenderId] = (sender, heartbeatResponsePacket);
-                    if (!serverTimers.ContainsKey(heartbeatResponsePacket.SenderId))
-                    {
-                        serverTimers[heartbeatResponsePacket.SenderId]?.Dispose();
-                        serverTimers[heartbeatResponsePacket.SenderId] = new Timer(2000)
-                        {
-                            AutoReset = true
-                        };
-                        serverTimers[heartbeatResponsePacket.SenderId].Elapsed += (sender, args) =>
-                        {
-                            Console.WriteLine("Server with ID " + heartbeatResponsePacket.SenderId + " has timed out!");
-                            serverStatuses.Remove(heartbeatResponsePacket.SenderId);
-                            serverTimers.Remove(heartbeatResponsePacket.SenderId);
-                        };
-                    }
-                    else
-                    {
-                        serverTimers[heartbeatResponsePacket.SenderId].Stop();
-                        serverTimers[heartbeatResponsePacket.SenderId].Start();
-                    }
                 }
                 else if (packet is MatchJoinPacket matchJoinPacket)
                 {
